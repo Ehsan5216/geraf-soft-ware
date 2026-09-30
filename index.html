@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>ثبت فعالیت ها</title>
+  <title>سامانه ثبت فعالیت ها</title>
   <meta name="description" content="سامانه پیشرونده (PWA) آفلاین ثبت فعالیت‌ها - تهیه شده توسط مدیریت اتوماسیون و ارتباطات">
-  <meta property="og:title" content="ثبت فعالیت ها">
+  <meta property="og:title" content="سامانه ثبت فعالیت ها">
   <meta property="og:description" content="سامانه پیشرونده (PWA) آفلاین ثبت فعالیت‌ها - تهیه شده توسط مدیریت اتوماسیون و ارتباطات">
   
   <!-- PWA & Mobile Meta Tags -->
@@ -13,16 +13,16 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="ثبت فعالیت ها">
-  <meta name="application-name" content="ثبت فعالیت ها">
+  <meta name="apple-mobile-web-app-title" content="سامانه ثبت فعالیت ها">
+  <meta name="application-name" content="سامانه ثبت فعالیت ها">
   <meta name="msapplication-TileColor" content="#0f172a">
   <meta name="msapplication-tap-highlight" content="no">
 
-  <link rel="manifest" href="/manifest.json?v=5">
-  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=5">
-  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=5">
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=5">
-  <link rel="shortcut icon" href="/app-logo.png?v=5">
+  <link rel="manifest" href="/manifest.json?v=6">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=6">
+  <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png?v=6">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=6">
+  <link rel="shortcut icon" href="/app-logo.png?v=6">
 
   <script>
     // دریافت و نگهداری زودهنگام رویداد نصب PWA در اندروید و کروم
@@ -73,6 +73,44 @@
     window.onPersonnelPageSizeChange = window.onPersonnelPageSizeChange || function() {};
     window.goToPersonnelPage = window.goToPersonnelPage || function() {};
     window.renderPersonnelTable = window.renderPersonnelTable || function() {};
+
+    // توابع کرنومتر و ماژول زمان جهت جلوگیری از خطا قبل از لود کامل اسکریپت
+    window.toggleStopwatchPanel = window.toggleStopwatchPanel || function() {
+      const p = document.getElementById('stopwatchEmbeddedPanel');
+      const btn = document.getElementById('openStopwatchBtnText');
+      if (p) {
+        const isH = p.classList.contains('hidden');
+        if (isH) {
+          p.classList.remove('hidden');
+          p.classList.remove('stopwatch-3d-rotate');
+          void p.offsetWidth;
+          p.classList.add('stopwatch-3d-rotate');
+          if (btn) btn.textContent = 'بستن کرنومتر ✕';
+        } else {
+          p.classList.add('hidden');
+          p.classList.remove('stopwatch-3d-rotate');
+          if (btn) btn.textContent = 'کرنومتر دیجیتال (ثبت خودکار)';
+        }
+      }
+    };
+    window.openStopwatchModal = window.openStopwatchModal || function() {
+      const m = document.getElementById('stopwatchModal');
+      if (m) m.classList.remove('hidden');
+    };
+    window.closeStopwatchModal = window.closeStopwatchModal || function() {
+      const m = document.getElementById('stopwatchModal');
+      if (m) m.classList.add('hidden');
+    };
+    window.toggleStopwatchStartPause = window.toggleStopwatchStartPause || function() {};
+    window.startStopwatch = window.startStopwatch || function() {};
+    window.pauseStopwatch = window.pauseStopwatch || function() {};
+    window.resetStopwatch = window.resetStopwatch || function() {};
+    window.handleStopwatchSet = window.handleStopwatchSet || function() {};
+    window.saveDurationTime = window.saveDurationTime || function() {};
+    window.clearDurationInputs = window.clearDurationInputs || function() {};
+    window.applyStopwatchTimeToForm = window.applyStopwatchTimeToForm || function() {};
+    window.handleRebuildableSelectChange = window.handleRebuildableSelectChange || function() {};
+    window.clearRebuildableSelection = window.clearRebuildableSelection || function() {};
   </script>
 
   <!-- Tailwind CSS CDN -->
@@ -613,13 +651,88 @@
       background: #0f172a !important;
       border: 1px solid #334155 !important;
     }
+
+    /* انیمیشن چرخش آیکون و ورود اطلاعات به دیتابیس در صفحه درباره سیستم */
+    @keyframes aboutIconContinuousSpin {
+      0% { transform: rotate(0deg) scale(1); }
+      50% { transform: rotate(180deg) scale(1.06); }
+      100% { transform: rotate(360deg) scale(1); }
+    }
+    .about-icon-rotating {
+      animation: aboutIconContinuousSpin 3s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    @keyframes aboutDataPacketsFlow {
+      0% { transform: translateX(35px); opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { transform: translateX(-35px); opacity: 0; }
+    }
+    .about-packet-anim {
+      animation: aboutDataPacketsFlow 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    }
+
+    @keyframes aboutDbGlowing {
+      0%, 100% {
+        box-shadow: 0 0 25px rgba(6, 182, 212, 0.35), inset 0 0 15px rgba(6, 182, 212, 0.2);
+        border-color: rgba(6, 182, 212, 0.5);
+      }
+      50% {
+        box-shadow: 0 0 45px rgba(16, 185, 129, 0.65), inset 0 0 25px rgba(16, 185, 129, 0.35);
+        border-color: rgba(16, 185, 129, 0.85);
+      }
+    }
+    .about-db-box-glow {
+      animation: aboutDbGlowing 2s ease-in-out infinite;
+    }
+
+    /* =========================================================================
+       جلوه سه‌بعدی چرخشی باز شدن کرنومتر (3D Rotating Flip Animation)
+       ========================================================================= */
+    @keyframes stopwatch3dFlipIn {
+      0% {
+        opacity: 0;
+        transform: perspective(1000px) rotateY(-85deg) rotateX(15deg) scale(0.78);
+        box-shadow: 0 0 0 rgba(6, 182, 212, 0);
+      }
+      55% {
+        opacity: 1;
+        transform: perspective(1000px) rotateY(12deg) rotateX(-4deg) scale(1.03);
+        box-shadow: 0 20px 45px rgba(6, 182, 212, 0.45);
+      }
+      75% {
+        transform: perspective(1000px) rotateY(-5deg) rotateX(2deg) scale(0.99);
+      }
+      100% {
+        opacity: 1;
+        transform: perspective(1000px) rotateY(0deg) rotateX(0deg) scale(1);
+        box-shadow: 0 12px 30px rgba(6, 182, 212, 0.25);
+      }
+    }
+
+    .stopwatch-3d-rotate {
+      animation: stopwatch3dFlipIn 0.7s cubic-bezier(0.2, 0.85, 0.35, 1.1) forwards;
+      transform-style: preserve-3d;
+      backface-visibility: hidden;
+      will-change: transform, opacity;
+    }
+
+    @keyframes stopwatchIcon3dSpin {
+      0% { transform: perspective(500px) rotateY(0deg) scale(1); }
+      50% { transform: perspective(500px) rotateY(180deg) scale(1.3); }
+      100% { transform: perspective(500px) rotateY(360deg) scale(1); }
+    }
+
+    .spin-3d-btn {
+      animation: stopwatchIcon3dSpin 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
   </style>
 </head>
 
 <body class="bg-slate-950 text-slate-100 min-h-screen pb-16 flex flex-col antialiased selection:bg-amber-500 selection:text-black">
 
   <!-- =========================================================================
-       اسلاید ۵ ثانیه‌ای آغازین برنامه با انیمیشن چرخشی آیکون و محو شدن خودکار
+       اسلاید ۵ ثانیه‌ای آغازین برنامه با انیمیشن گرافیکی و محو شدن خودکار
        ========================================================================= -->
   <div id="appSplashScreen" class="fixed inset-0 z-[999999] flex flex-col items-center justify-center bg-slate-950 text-slate-100 overflow-hidden select-none" style="background: #020617 !important;">
     <!-- جلوه‌های نوری پس‌زمینه صنعتی ذوب آهن -->
@@ -627,34 +740,32 @@
     <div class="absolute -bottom-32 -left-32 w-96 h-96 rounded-full blur-3xl pointer-events-none" style="background: rgba(37, 99, 235, 0.15);"></div>
     <div class="absolute inset-0 pointer-events-none" style="background: radial-gradient(circle at center, rgba(245, 158, 11, 0.08) 0%, transparent 70%);"></div>
 
-    <!-- بدنه مرکزی اسلاید -->
-    <div class="relative z-10 flex flex-col items-center justify-center px-4 max-w-xl w-full text-center">
+    <!-- بدنه مرکزی اسلاید ۵ ثانیه‌ای برنامه -->
+    <div class="relative z-10 flex flex-col items-center justify-center px-4 max-w-xl w-full text-center space-y-4">
       
-      <!-- آیکون برنامه با انیمیشن چرخشی اختصاصی و هاله صنعتی -->
-      <div class="splash-icon-anim relative mb-6">
-        <!-- حلقه چرخشی بیرونی متحرک -->
-        <div class="splash-ring-anim absolute -inset-3.5 rounded-[36px] border-2 border-dashed border-amber-500/40 pointer-events-none"></div>
-        <div class="absolute -inset-2.5 rounded-[34px] bg-gradient-to-tr from-amber-500/25 to-amber-300/10 blur-xl pointer-events-none"></div>
-        
-        <!-- کارت آیکون اصلی سیستم -->
-        <div class="splash-logo-box splash-card-glow w-32 h-32 sm:w-40 sm:h-40 md:w-44 md:h-44 rounded-3xl p-3 shadow-2xl flex items-center justify-center relative overflow-hidden backdrop-blur-md">
-          <img src="/app-logo.png?v=5" alt="لوگوی سیستم ثبت فعالیتها ذوب آهن اصفهان" class="w-full h-full object-contain filter drop-shadow-xl">
+      <!-- آیکون چرخشی لوگوی برنامه طبق درخواست کاربر -->
+      <div class="relative mb-2 flex items-center justify-center">
+        <!-- حلقه چرخان بیرونی نوری -->
+        <div class="splash-ring-anim absolute -inset-3.5 rounded-full bg-gradient-to-tr from-amber-500 via-amber-300 to-cyan-500 opacity-60 blur-sm pointer-events-none"></div>
+        <!-- کادر لوگو با انیمیشن ورود چرخشی و پالس نوری -->
+        <div class="splash-logo-box splash-card-glow splash-icon-anim relative w-24 h-24 sm:w-28 sm:h-28 rounded-3xl p-3 shadow-2xl flex items-center justify-center overflow-hidden">
+          <img src="/app-logo.png?v=6" onerror="if(!this.dataset.tried){this.dataset.tried=1;this.src='/app-logo.png';}" class="w-full h-full object-contain filter drop-shadow-lg" alt="لوگوی سامانه ثبت فعالیت‌ها">
         </div>
       </div>
 
       <!-- خط اول: سامانه ثبت فعالیتها ذوب اهن اصفهان -->
-      <h1 class="splash-text-1 text-xl sm:text-2xl md:text-3xl font-black tracking-normal leading-relaxed">
+      <h1 class="splash-text-1 text-2xl sm:text-3xl md:text-4xl font-black tracking-normal leading-relaxed">
         سامانه ثبت فعالیتها ذوب اهن اصفهان
       </h1>
 
       <!-- خط دوم: مدیریت اتوماسیون و ارتباطات -->
-      <p class="splash-text-2 text-sm sm:text-base md:text-lg font-bold mt-2.5 tracking-wide">
+      <p class="splash-text-2 text-base sm:text-lg md:text-xl font-bold tracking-wide">
         مدیریت اتوماسیون و ارتباطات
       </p>
 
       <!-- نوار بارگذاری ۵ ثانیه‌ای هماهنگ -->
-      <div class="splash-loader-wrap w-52 sm:w-64 mt-8 space-y-2.5">
-        <div class="splash-progress-track w-full h-2 rounded-full overflow-hidden p-0.5 shadow-inner">
+      <div class="splash-loader-wrap w-56 sm:w-72 mt-6 space-y-3">
+        <div class="splash-progress-track w-full h-2.5 rounded-full overflow-hidden p-0.5 shadow-inner">
           <div class="splash-progress-inner h-full bg-gradient-to-r from-amber-500 via-amber-400 to-amber-300 rounded-full"></div>
         </div>
         <div class="flex items-center justify-center gap-2 text-xs font-mono" style="color: #94a3b8 !important;">
@@ -702,22 +813,31 @@
       <!-- عنوان و لوگوی سیستم (کلیک روی آرم برای ورود مدیران سیستم) -->
       <div class="flex items-center gap-3">
         <button type="button" id="headerLogoBtn" onclick="openAdminAccess()" class="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-slate-950 p-1 shadow-xl shadow-black/80 flex items-center justify-center shrink-0 border border-slate-700/80 overflow-hidden ring-1 ring-amber-400/20 hover:ring-amber-400/70 hover:scale-105 active:scale-95 transition cursor-pointer group" title="ورود مدیران سیستم (کلیک روی آرم)">
-          <img src="/app-logo.png?v=5" class="w-full h-full object-contain filter drop-shadow-md group-hover:brightness-110 transition" alt="لوگوی سیستم - ورود مدیران">
+          <img src="/app-logo.png?v=6" onerror="if(!this.dataset.tried){this.dataset.tried=1;this.src='/app-logo.png';}" class="w-full h-full object-contain filter drop-shadow-md group-hover:brightness-110 transition" alt="لوگوی سیستم - ورود مدیران">
         </button>
         <div>
-          <h1 class="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-1.5" style="text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85), 0 0 10px rgba(245, 158, 11, 0.3);">
-            <span>ثبت فعالیت ها</span>
-          </h1>
-          <p class="text-[11px] sm:text-xs text-amber-300 font-semibold tracking-normal mt-0.5" style="text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);">تهیه شده توسط مدیریت اتوماسیون و ارتباطات</p>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-black text-white tracking-tight flex items-center gap-1.5" style="text-shadow: 0 2px 4px rgba(0, 0, 0, 0.85), 0 0 10px rgba(245, 158, 11, 0.3);">
+              <span>سامانه ثبت فعالیت ها</span>
+            </h1>
+            <button type="button" onclick="checkAppUpdate(true)" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition cursor-pointer shadow-sm" title="نسخه پروژه - کلیک برای بررسی بروزرسانی آنلاین">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span id="appHeaderVersionBadge">v2.5.7</span>
+            </button>
+          </div>
+          <button type="button" onclick="openAboutSystemPage()" class="text-[11px] sm:text-xs text-amber-300 hover:text-amber-200 font-semibold tracking-normal mt-0.5 transition inline-flex items-center gap-1 cursor-pointer group text-right active:scale-95" style="text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);" title="درباره سامانه و شناسنامه نرم‌افزار (کلیک کنید)">
+            <span class="border-b border-dashed border-amber-400/50 group-hover:border-amber-300 transition">تهیه شده در مدیریت اتوماسیون و ارتباطات</span>
+            <svg class="w-3 h-3 text-amber-400 group-hover:translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </button>
         </div>
       </div>
 
       <!-- کنترل‌های هدر: وضعیت شبکه و صف آفلاین -->
       <div class="flex items-center gap-2">
-        <!-- وضعیت آنلاین/آفلاین -->
-        <div id="networkStatusBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300 shadow-sm" title="وضعیت ارتباط با شبکه">
+        <!-- وضعیت آنلاین/آفلاین (عبارت آنلاین طبق درخواست حذف شد و نشانگر تنها در حالت قطعی نمایش داده می‌شود) -->
+        <div id="networkStatusBadge" class="hidden inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 border border-slate-700 text-slate-300 shadow-sm" title="وضعیت ارتباط با شبکه">
           <span id="networkStatusDot" class="w-2 h-2 rounded-full bg-slate-400"></span>
-          <span id="networkStatusText" class="hidden sm:inline">بررسی وضعیت...</span>
+          <span id="networkStatusText" class="hidden"></span>
         </div>
 
         <!-- صف در انتظار ارسال -->
@@ -745,11 +865,8 @@
           <span class="hidden xs:inline">نصب PWA</span>
         </button>
 
-        <!-- نشانگر وضعیت نصب شده (فقط در حالت Standalone) -->
-        <div id="pwaInstalledBadge" class="hidden inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-950/80 border border-emerald-500/40 text-emerald-400 shadow-sm" title="در حال اجرا به صورت اپلیکیشن نصب‌شده">
-          <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          <span class="hidden sm:inline">نصب‌شده</span>
-        </div>
+        <!-- نشانگر وضعیت نصب شده (طبق درخواست کاربر عبارت نصب شده حذف گردید) -->
+        <div id="pwaInstalledBadge" class="hidden" aria-hidden="true"></div>
       </div>
 
     </div>
@@ -835,67 +952,55 @@
     <!-- فرم اصلی ثبت گراف -->
     <form id="graphRegistrationForm" class="space-y-4">
 
-      <!-- کارت ۲: ورودی بارکد و کد تجهیز (ASETT ID) -->
-      <div class="bg-slate-900/90 rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-lg space-y-4">
+      <!-- کارت ۲: ورودی بارکد و کد تجهیز (ASETT ID  شناسه محل فعالیت) -->
+      <div class="bg-slate-900/90 rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-lg space-y-3">
         <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
           <h2 class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
-            <span>ورودی بارکد و QR Code تجهیزات (ASETT ID)</span>
+            <span>ASETT ID  شناسه محل فعالیت</span>
           </h2>
-          <span class="text-[11px] text-amber-400/90 font-medium bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">امکان اسکن بارکد با دوربین یا تایپ دستی اطلاعات</span>
         </div>
 
         <div class="space-y-1.5">
-          <div class="flex items-center justify-between">
-            <label for="asettInput" class="block text-xs font-bold text-slate-100 flex items-center gap-1.5">
-              <span>شناسه یا عنوان تجهیز (ASETT ID):</span>
-              <span class="text-slate-400 font-normal text-[11px]">(اسکن QR/بارکد یا تایپ و انتخاب از لیست)</span>
-            </label>
-            <span class="text-[10px] text-amber-400/90 font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">تایپ دستی یا اسکن دوربین</span>
-          </div>
           <div class="flex gap-2">
-            <input type="text" id="asettInput" list="asettDatalist" oninput="handleAsettInput(this)" onchange="handleAsettInput(this)" placeholder="کد یا عنوان ASETT ID را تایپ یا اسکن کنید..." class="flex-1 bg-slate-950/80 border border-slate-700 hover:border-amber-500 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-amber-300 placeholder-slate-400 transition outline-none" autocomplete="off">
+            <input type="text" id="asettInput" list="asettDatalist" oninput="handleAsettInput(this)" onchange="handleAsettInput(this)" placeholder="ASETT ID  شناسه محل فعالیت را تایپ یا اسکن کنید..." class="flex-1 bg-slate-950/80 border border-slate-700 hover:border-amber-500 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-amber-300 placeholder-slate-400 transition outline-none" autocomplete="off">
             <datalist id="asettDatalist"></datalist>
             <button type="button" id="clearAsettBtn" onclick="clearQrField('asettInput')" class="hidden px-2.5 bg-slate-800 hover:bg-red-950 hover:text-red-300 text-slate-300 border border-slate-700 rounded-xl transition" title="پاکسازی کد">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
-            <button type="button" onclick="openQrScannerModal('asettInput')" class="px-4 bg-slate-800 hover:bg-slate-700 active:bg-amber-500 active:text-slate-950 border border-slate-700 rounded-xl text-slate-200 flex items-center justify-center gap-1.5 transition shadow-sm" title="اسکن بارکد ASETT ID با دوربین">
+            <button type="button" onclick="openQrScannerModal('asettInput')" class="px-4 bg-slate-800 hover:bg-slate-700 active:bg-amber-500 active:text-slate-950 border border-slate-700 rounded-xl text-slate-200 flex items-center justify-center gap-1.5 transition shadow-sm" title="اسکن بارکد و QR Code با دوربین">
               <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
               <span class="text-xs font-bold hidden sm:inline text-amber-300">اسکن با دوربین</span>
             </button>
           </div>
-          <div id="asettFeedback" class="text-[11px] text-slate-400 flex items-center gap-1.5 pt-0.5">
-            <svg class="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span>با ثبت یا اسکن ASETT ID، فقط قطعات قابل بازسازی (Rebuildable) مربوط به همان سرپرستی و واحد از دیتابیس بارگذاری و انتخاب می‌شوند.</span>
-          </div>
+          <div id="asettFeedback" class="hidden"></div>
         </div>
       </div>
 
-      <!-- کارت ۳: نوع فعالیت انجام شده و قطعه بازسازی (Rebuildable) -->
+      <!-- کارت ۳: فرم Rebuidble ID شناسه تجهیز -->
       <div class="bg-slate-900/90 rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-lg space-y-4">
         <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
           <h2 class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
-            <span>نوع فعالیت انجام شده و قطعه بازسازی (Rebuildable)</span>
+            <span>Rebuidble ID شناسه تجهیز </span>
           </h2>
-          <span class="text-xs text-amber-400 font-bold">* انتخاب قطعه بازسازی و حداقل یک فعالیت الزامی است</span>
         </div>
 
-        <!-- ماژول منتقل‌شده Rebuildable ID: فرم کشویی (Select Dropdown) با اتصال به دیتابیس ASETT -->
+        <!-- ماژول Rebuidble ID شناسه تجهیز: فرم کشویی منحصراً از دیتابیس ASETT (حالت دستی حذف شده است) -->
         <div class="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2.5">
           <div class="flex items-center justify-between">
             <label for="rebuildableSelect" class="text-xs font-bold text-cyan-300 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
-              <span>قطعه قابل بازسازی (Rebuildable ID):</span>
+              <span>Rebuidble ID شناسه تجهیز:</span>
             </label>
             <span id="rebuildableStatusBadge" class="text-[10px] text-slate-400 font-bold bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700">
-              منتظر ورود ASETT ID
+              منتظر ورود ASETT ID  شناسه محل فعالیت
             </span>
           </div>
 
           <div class="flex gap-2">
             <select id="rebuildableSelect" onchange="handleRebuildableSelectChange(this)" disabled class="flex-1 bg-slate-900 border border-slate-700 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-slate-100 transition outline-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
-              <option value=""></option>
+              <option value="">-- فقط انتخاب از لیست قطعات دیتابیس (ثبت دستی حذف گردید) --</option>
             </select>
             <button type="button" id="clearRebuildableSelectBtn" onclick="clearRebuildableSelection()" class="hidden px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-xl text-xs font-semibold transition" title="پاکسازی انتخاب قطعه">
               پاکسازی
@@ -910,28 +1015,28 @@
             </div>
             <p id="rebuildableDetailDesc" class="text-[11px] text-slate-300 leading-relaxed"></p>
           </div>
-
-          <!-- فیلد ورودی دستی قطعه سفارشی در صورت نیاز کاربر -->
-          <div id="customRebuildableBox" class="hidden p-3 rounded-xl bg-slate-900 border border-cyan-500/40 space-y-1.5 animate-fadeIn">
-            <label for="customRebuildableInput" class="block text-xs font-bold text-cyan-300">عنوان قطعه قابل بازسازی (دستی / خارج از دیتابیس):</label>
-            <input type="text" id="customRebuildableInput" placeholder="عنوان قطعه بازسازی مورد نظر را وارد نمایید..." class="w-full bg-slate-950 border border-slate-700 focus:border-cyan-400 rounded-xl px-3.5 py-2 text-xs text-slate-100 outline-none">
-          </div>
         </div>
 
         <!-- انتخاب نوع اقدام و دکمه ADD -->
         <div class="space-y-3 pt-1">
           <div class="space-y-1.5">
-            <label for="activityTypeSelect" class="block text-xs font-bold text-slate-100">انتخاب نوع اقدام / عملیات:</label>
+            <label for="activityTypeSelect" class="block space-y-0.5">
+              <span class="block text-amber-400 font-black tracking-wider text-xs sm:text-sm">ACTIVITY</span>
+              <span class="block text-xs font-bold text-slate-100">انتخاب نوع اقدام / فعالیت:</span>
+            </label>
             <div class="flex flex-col sm:flex-row gap-2">
               <select id="activityTypeSelect" onchange="handleActivityChange()" class="flex-1 bg-slate-950 border border-slate-700 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-xl px-3.5 py-2.5 text-sm text-slate-100 transition outline-none cursor-pointer">
                 <option value="">-- لطفاً نوع فعالیت را انتخاب فرمایید --</option>
                 <option value="انجام بازدید و سرکشی">انجام بازدید و سرکشی</option>
                 <option value="سرویس و هواگیری و نظافت">سرویس و هواگیری و نظافت</option>
-                <option value="آچارکشی اتصالات و تبدیلات مکانیکی و گلندها">آچارکشی اتصالات و تبدیلات مکانیکی و گلندها</option>
+                <option value="فعالیت های مکانیکال (جوشکاری،برشکاری،آچارکشی و...)">فعالیت های مکانیکال (جوشکاری،برشکاری،آچارکشی و...)</option>
                 <option value="آچارکشی ترمینال‌ها و فیوزها">آچارکشی ترمینال‌ها و فیوزها</option>
                 <option value="مونتاژ تجهیزات">مونتاژ تجهیزات</option>
                 <option value="دمونتاژ تجهیزات">دمونتاژ تجهیزات</option>
-                <option value="انجام تنظیمات حرفه‌ای">انجام تنظیمات و فعالیت‌های حرفه‌ای (همراه با شماره مرجع)</option>
+                <option value="انجام تنظیمات confing/calib (همراه شماره مرجع)">انجام تنظیمات confing/calib (همراه شماره مرجع)</option>
+                <option value="نظارت ،پیگیری،بررسی،بازدید ، حضور در جلسه">نظارت ،پیگیری،بررسی،بازدید ، حضور در جلسه</option>
+                <option value="طراحی،نقشه کشی ،برنامه نویسی">طراحی،نقشه کشی ،برنامه نویسی</option>
+                <option value="تعمیر و عیب یابی تجهیز">تعمیر و عیب یابی تجهیز</option>
                 <option value="انجام کابل‌کشی">انجام کابل‌کشی (همراه با متراژ)</option>
                 <option value="انجام کاندوئیت‌کاری">انجام کاندوئیت‌کاری (همراه با متراژ)</option>
                 <option value="سایر فعالیت‌ها">سایر فعالیت‌ها (تعریف فعالیت دستی)...</option>
@@ -989,7 +1094,153 @@
 
       </div>
 
-      <!-- کارت ۳: توضیحات تکمیلی (اختیاری) -->
+      <!-- ماژول ثبت مدت زمان فعالیت (ورودی دستی ساعت، دقیقه و ثانیه + دکمه ذخیره + کرنومتر دیجیتال) -->
+      <div id="activityDurationCard" class="bg-slate-900/90 rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-lg space-y-3.5">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+          <h2 class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
+            <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>مدت زمان فعالیت</span>
+          </h2>
+          <!-- نشانگر وضعیت فعال بودن یا متوقف بودن کرنومتر در پس‌زمینه -->
+          <div id="stopwatchRunningIndicator" class="hidden items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-pulse" dir="ltr">
+            <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+            <span dir="rtl">کرنومتر: <span id="stopwatchMiniDisplay" dir="ltr" class="font-mono font-black text-amber-300">00:00</span></span>
+          </div>
+        </div>
+
+        <div class="space-y-3">
+          <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+            <!-- بخش ورودی دستی ساعت و دقیقه با جهت استاندارد ساعت دیجیتال (LTR) بدون ثانیه -->
+            <div class="sm:col-span-7 flex items-center gap-2" dir="ltr">
+              <!-- ساعت (سمت چپ) -->
+              <div class="flex-1 space-y-1 text-left" dir="rtl">
+                <label for="durationHoursInput" class="block text-xs font-bold text-slate-300">ساعت:</label>
+                <div class="relative">
+                  <input type="number" id="durationHoursInput" min="0" max="999" placeholder="0" oninput="updateDurationFormattedDisplay()" onkeyup="updateDurationFormattedDisplay()" onchange="updateDurationFormattedDisplay()" class="w-full bg-slate-950 border border-slate-700 hover:border-amber-500 focus:border-amber-500 rounded-xl px-3 py-2 text-sm font-mono text-center text-amber-300 outline-none">
+                  <span class="absolute left-2.5 top-2.5 text-[10px] text-slate-500 font-bold pointer-events-none">HR</span>
+                </div>
+              </div>
+
+              <span class="text-slate-500 font-black text-lg pb-1 select-none">:</span>
+
+              <!-- دقیقه (سمت راست) -->
+              <div class="flex-1 space-y-1 text-left" dir="rtl">
+                <label for="durationMinutesInput" class="block text-xs font-bold text-slate-300">دقیقه:</label>
+                <div class="relative">
+                  <input type="number" id="durationMinutesInput" min="0" max="59" placeholder="0" oninput="updateDurationFormattedDisplay()" onkeyup="updateDurationFormattedDisplay()" onchange="updateDurationFormattedDisplay()" class="w-full bg-slate-950 border border-slate-700 hover:border-amber-500 focus:border-amber-500 rounded-xl px-3 py-2 text-sm font-mono text-center text-amber-300 outline-none">
+                  <span class="absolute left-2.5 top-2.5 text-[10px] text-slate-500 font-bold pointer-events-none">MIN</span>
+                </div>
+              </div>
+
+              <!-- فیلد مخفی ثانیه برای سازگاری کامل داده‌ای و ثبت ثانیه‌های ثبت شده توسط کرنومتر -->
+              <input type="hidden" id="durationSecondsInput" value="0">
+
+              <!-- دکمه پاکسازی زمان دستی -->
+              <button type="button" onclick="clearDurationInputs()" class="p-2 sm:p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-red-400 rounded-xl border border-slate-700 transition shrink-0 mt-5 cursor-pointer" title="پاکسازی مقادیر زمان">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+
+            <!-- دکمه‌های عملیاتی: ذخیره زمان و باز کردن کرنومتر دیجیتال -->
+            <div class="sm:col-span-5 flex flex-col sm:flex-row gap-2">
+              <!-- دکمه ذخیره زمان طبق درخواست کاربر -->
+              <button type="button" id="saveDurationBtn" onclick="saveDurationTime()" class="flex-1 py-2.5 px-3 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-slate-950 font-black rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 transition cursor-pointer" title="ذخیره و ثبت زمان وارد شده">
+                <svg class="w-4 h-4 text-slate-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>ذخیره زمان</span>
+              </button>
+
+              <!-- دکمه باز کردن کرنومتر دیجیتال با افکت چرخشی ۳ بعدی و ثبت خودکار -->
+              <button type="button" id="openStopwatchBtn" onclick="toggleStopwatchPanel()" class="flex-1 py-2.5 px-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 active:scale-95 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-1.5 shadow-md shadow-cyan-600/20 transition cursor-pointer group" title="باز کردن سریع کرنومتر دیجیتال با جلوه سه‌بعدی چرخشی و ثبت خودکار">
+                <svg class="w-4 h-4 text-cyan-200 transition-transform duration-500 group-hover:rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span id="openStopwatchBtnText">کرنومتر دیجیتال (ثبت خودکار)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- پنل بازشونده مستقیم کرنومتر صنعتی درون کارت فرم با جلوه سه‌بعدی چرخشی و ثبت خودکار زمان -->
+          <div id="stopwatchEmbeddedPanel" class="hidden p-4 rounded-2xl bg-slate-950/95 border-2 border-cyan-500/50 shadow-2xl space-y-3.5 transform-gpu">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+              <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span class="text-xs sm:text-sm font-black text-cyan-300">کرنومتر دیجیتال اندازه‌گیری زمان (ثبت کاملاً خودکار)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="openStopwatchModal()" class="text-xs text-cyan-400 hover:text-cyan-200 bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 px-2 py-1 rounded-lg font-bold transition cursor-pointer flex items-center gap-1" title="مشاهده در پنجره شناور بزرگ">
+                  <span>تمام‌صفحه</span>
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </button>
+                <button type="button" onclick="toggleStopwatchPanel()" class="text-slate-400 hover:text-slate-200 text-xs px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 font-bold transition cursor-pointer" title="بستن این پنل">
+                  بستن ✕
+                </button>
+              </div>
+            </div>
+
+            <!-- پیام ثبت خودکار زمان -->
+            <div class="text-[11px] sm:text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 px-3 py-1.5 rounded-xl flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0 animate-ping"></span>
+              <span>زمان این کرنومتر به‌صورت <strong>اتوماتیک و لحظه‌ای</strong> در فرم فعالیت ثبت و درج می‌گردد.</span>
+            </div>
+
+            <!-- نمایشگر دیجیتال بزرگ با جهت استاندارد LTR (ساعت : دقیقه : ثانیه . صدم‌ثانیه) -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center shadow-inner">
+              <div class="flex items-baseline justify-center gap-1 font-mono tracking-wider select-none" dir="ltr">
+                <span id="cardSwHours" class="text-3xl sm:text-4xl font-black text-amber-400 font-mono">00</span>
+                <span class="text-2xl sm:text-3xl font-black text-amber-500/70 select-none">:</span>
+                <span id="cardSwMinutes" class="text-3xl sm:text-4xl font-black text-amber-400 font-mono">00</span>
+                <span class="text-2xl sm:text-3xl font-black text-amber-500/70 animate-pulse select-none">:</span>
+                <span id="cardSwSeconds" class="text-3xl sm:text-4xl font-black text-amber-400 font-mono">00</span>
+                <span class="text-lg sm:text-xl font-bold text-cyan-400/80 select-none">.</span>
+                <span id="cardSwMillis" class="text-lg sm:text-xl font-bold text-cyan-400 font-mono">00</span>
+              </div>
+              <div class="flex items-center justify-center gap-2 text-xs mt-1.5">
+                <span id="cardSwStatusDot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+                <span id="cardSwStatusText" class="text-slate-400 font-medium">آماده زمان‌سنجی (ثبت خودکار)</span>
+              </div>
+            </div>
+
+            <!-- دکمه‌های کنترل کرنومتر -->
+            <div class="space-y-2">
+              <!-- دکمه شروع/توقف بزرگ -->
+              <button type="button" id="cardSwStartPauseBtn" onclick="toggleStopwatchStartPause()" class="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-98 text-slate-950 font-black text-sm rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20 transition cursor-pointer">
+                <svg id="cardSwStartIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <svg id="cardSwPauseIcon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span id="cardSwStartPauseText">شروع اندازه‌گیری زمان (ثبت خودکار)</span>
+              </button>
+
+              <!-- دکمه‌های مکمل: صفر کردن و ثبت قطعی -->
+              <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="resetStopwatch()" class="py-2.5 px-2 bg-slate-800 hover:bg-red-950/60 active:scale-95 text-red-300 border border-slate-700 hover:border-red-500/60 font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer" title="صفر کردن زمان کرنومتر">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                  <span>صفر کردن (RESET)</span>
+                </button>
+
+                <button type="button" onclick="applyStopwatchTimeToForm()" class="py-2.5 px-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 text-slate-950 font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition cursor-pointer" title="تأیید و ذخیره زمان در فرم">
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                  <span>ثبت و ذخیره در فرم</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- خلاصه زمان نهایی با متن فارسی روان -->
+          <div id="durationSummaryBadge" class="hidden text-xs text-cyan-300 bg-cyan-950/40 border border-cyan-800/50 p-2.5 rounded-xl items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              <span>مدت زمان ثبت‌شده فعالیت:</span>
+              <strong id="durationFormattedText" class="font-bold text-cyan-200">۰ دقیقه و ۰ ثانیه</strong>
+            </span>
+            <span id="durationDigitalText" dir="ltr" class="font-mono text-cyan-400 font-bold text-xs bg-slate-900/80 px-2 py-0.5 rounded border border-cyan-700/50">00:00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- کارت ۵: توضیحات تکمیلی (اختیاری) -->
       <div class="bg-slate-900/90 rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-lg space-y-2">
         <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
           <label for="reportNotesInput" class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
@@ -1034,7 +1285,49 @@
         </div>
       </div>
 
-      <!-- کارت ۵: تاریخ و زمان شمسی + موقعیت جغرافیایی GPS -->
+      <!-- کارت ۵: تصویر تجهیز و محیط کار (انتقال‌یافته به بالای ماژول زمان و تاریخ طبق درخواست کاربر) -->
+      <div id="photosCard" class="bg-slate-900/90 rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-lg space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+          <h2 class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            <span>تصویر تجهیز و محیط کار</span>
+          </h2>
+          <div class="flex items-center gap-2">
+            <span id="photosCountBadge" class="hidden text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold font-mono">۰ تصویر الحاق‌شده</span>
+            <span class="text-[11px] text-slate-300 font-medium">(پشتیبانی از چندین عکس)</span>
+          </div>
+        </div>
+
+        <input type="file" id="cameraFileInput" accept="image/*" capture="environment" multiple class="hidden">
+
+        <!-- گالری پیش‌نمایش عکس‌های ثبت شده -->
+        <div id="photosGalleryContainer" class="hidden space-y-3">
+          <div id="photosGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            <!-- عکس‌ها به صورت پویا در این گالری رندر می‌شوند -->
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+            <button type="button" onclick="document.getElementById('cameraFileInput').click()" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl flex items-center gap-1.5 shadow transition active:scale-95">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+              <span>ثبت یا انتخاب عکس دیگر</span>
+            </button>
+            <button type="button" onclick="removeAllCapturedPhotos()" class="px-3 py-2 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/50 rounded-xl text-xs font-bold transition">
+              حذف همه عکس‌ها
+            </button>
+          </div>
+        </div>
+
+        <!-- کادر بدون تصویر اولیه -->
+        <div id="cameraUploadPlaceholder" class="border-2 border-dashed border-slate-700 hover:border-amber-400 rounded-xl p-6 text-center transition flex flex-col items-center justify-center cursor-pointer bg-slate-950/50" onclick="document.getElementById('cameraFileInput').click()">
+          <div class="w-14 h-14 rounded-2xl bg-slate-800 text-amber-400 flex items-center justify-center mb-2.5 shadow-md border border-slate-700">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          </div>
+          <span class="text-sm font-extrabold text-slate-100">کلیک جهت عکس‌برداری با دوربین یا انتخاب چندین عکس</span>
+          <span class="text-xs text-slate-300 mt-1">عکس‌ها همراه با مُهر زمان و تاریخ رسمی مدیریت اتوماسیون ذخیره می‌شوند.</span>
+        </div>
+      </div>
+
+      <!-- کارت ۶: تاریخ و زمان شمسی + موقعیت جغرافیایی GPS -->
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         
         <!-- ساعت و تاریخ شمسی -->
@@ -1077,48 +1370,6 @@
           </div>
         </div>
 
-      </div>
-
-      <!-- کارت ۶: تصویر تجهیز و محیط کار (انتقال‌یافته به انتهای فرم با پشتیبانی از چندین عکس) -->
-      <div id="photosCard" class="bg-slate-900/90 rounded-2xl p-4 sm:p-5 border border-slate-800 shadow-lg space-y-4">
-        <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-          <h2 class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-            <span>تصویر تجهیز و محیط کار</span>
-          </h2>
-          <div class="flex items-center gap-2">
-            <span id="photosCountBadge" class="hidden text-xs px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold font-mono">۰ تصویر الحاق‌شده</span>
-            <span class="text-[11px] text-slate-300 font-medium">(پشتیبانی از چندین عکس)</span>
-          </div>
-        </div>
-
-        <input type="file" id="cameraFileInput" accept="image/*" capture="environment" multiple class="hidden">
-
-        <!-- گالری پیش‌نمایش عکس‌های ثبت شده -->
-        <div id="photosGalleryContainer" class="hidden space-y-3">
-          <div id="photosGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            <!-- عکس‌ها به صورت پویا در این گالری رندر می‌شوند -->
-          </div>
-
-          <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
-            <button type="button" onclick="document.getElementById('cameraFileInput').click()" class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm rounded-xl flex items-center gap-1.5 shadow transition active:scale-95">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-              <span>ثبت یا انتخاب عکس دیگر</span>
-            </button>
-            <button type="button" onclick="removeAllCapturedPhotos()" class="px-3 py-2 bg-red-950/60 hover:bg-red-900/80 text-red-300 border border-red-800/50 rounded-xl text-xs font-bold transition">
-              حذف همه عکس‌ها
-            </button>
-          </div>
-        </div>
-
-        <!-- کادر بدون تصویر اولیه -->
-        <div id="cameraUploadPlaceholder" class="border-2 border-dashed border-slate-700 hover:border-amber-400 rounded-xl p-6 text-center transition flex flex-col items-center justify-center cursor-pointer bg-slate-950/50" onclick="document.getElementById('cameraFileInput').click()">
-          <div class="w-14 h-14 rounded-2xl bg-slate-800 text-amber-400 flex items-center justify-center mb-2.5 shadow-md border border-slate-700">
-            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          </div>
-          <span class="text-sm font-extrabold text-slate-100">کلیک جهت عکس‌برداری با دوربین یا انتخاب چندین عکس</span>
-          <span class="text-xs text-slate-300 mt-1">عکس‌ها همراه با مُهر زمان و تاریخ رسمی مدیریت اتوماسیون ذخیره می‌شوند.</span>
-        </div>
       </div>
 
       <!-- دکمه نهایی بزرگ صنعتی: ثبت فعالیت -->
@@ -1262,7 +1513,7 @@
       
       <!-- نوار فیلتر و جستجوی پیشرفته -->
       <div class="bg-slate-900/80 rounded-2xl p-4 border border-slate-800 shadow-md space-y-3">
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
           <!-- جستجوی متنی -->
           <div class="space-y-1">
             <label for="filterSearchInput" class="text-xs text-slate-300 font-medium">جستجو (شخص، شرح، تجهیز):</label>
@@ -1298,22 +1549,53 @@
               <option value="">-- همه فعالیت‌ها --</option>
               <option value="انجام بازدید و سرکشی">انجام بازدید و سرکشی</option>
               <option value="سرویس و هواگیری و نظافت">سرویس و هواگیری و نظافت</option>
-              <option value="آچارکشی اتصالات و تبدیلات مکانیکی و گلندها">آچارکشی اتصالات و تبدیلات</option>
+              <option value="فعالیت های مکانیکال (جوشکاری،برشکاری،آچارکشی و...)">فعالیت های مکانیکال (جوشکاری،برشکاری،آچارکشی و...)</option>
               <option value="آچارکشی ترمینال‌ها و فیوزها">آچارکشی ترمینال‌ها و فیوزها</option>
               <option value="مونتاژ تجهیزات">مونتاژ تجهیزات</option>
               <option value="دمونتاژ تجهیزات">دمونتاژ تجهیزات</option>
-              <option value="انجام تنظیمات حرفه‌ای">انجام تنظیمات حرفه‌ای</option>
+              <option value="انجام تنظیمات confing/calib (همراه شماره مرجع)">انجام تنظیمات confing/calib (همراه شماره مرجع)</option>
+              <option value="نظارت ،پیگیری،بررسی،بازدید ، حضور در جلسه">نظارت ،پیگیری،بررسی،بازدید ، حضور در جلسه</option>
+              <option value="طراحی،نقشه کشی ،برنامه نویسی">طراحی،نقشه کشی ،برنامه نویسی</option>
+              <option value="تعمیر و عیب یابی تجهیز">تعمیر و عیب یابی تجهیز</option>
               <option value="انجام کابل‌کشی">انجام کابل‌کشی</option>
               <option value="انجام کاندوئیت‌کاری">انجام کاندوئیت‌کاری</option>
             </select>
           </div>
 
-          <!-- فیلتر تاریخ شمسی از/تا -->
+          <!-- فیلتر تاریخ شمسی از/تا با تقویم فارسی تعاملی -->
           <div class="space-y-1">
-            <label for="filterDateFrom" class="text-xs text-slate-300 font-medium">تاریخ شمسی (از - تا):</label>
+            <div class="flex items-center justify-between">
+              <label for="filterDateFrom" class="text-xs text-slate-300 font-medium">تاریخ شمسی (از - تا):</label>
+              <button type="button" onclick="openPersianCalendarModal('both')" class="text-[10px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 transition cursor-pointer" title="باز کردن تقویم فارسی">
+                <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span>تقویم فارسی</span>
+              </button>
+            </div>
             <div class="flex gap-1.5">
-              <input type="text" id="filterDateFrom" oninput="applyAdminFilters()" placeholder="از: ۱۴۰۵/۰۱/۰۱" class="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-2 py-2 text-xs font-mono text-slate-100 outline-none">
-              <input type="text" id="filterDateTo" oninput="applyAdminFilters()" placeholder="تا: ۱۴۰۵/۱۲/۲۹" class="w-1/2 bg-slate-950 border border-slate-700 rounded-xl px-2 py-2 text-xs font-mono text-slate-100 outline-none">
+              <input type="text" id="filterDateFrom" oninput="applyAdminFilters()" onclick="openPersianCalendarModal('from')" placeholder="از: ۱۴۰۵/۰۱/۰۱" class="w-1/2 bg-slate-950 border border-slate-700 hover:border-amber-500 focus:border-amber-500 rounded-xl px-2 py-2 text-xs font-mono text-slate-100 outline-none cursor-pointer" title="کلیک برای انتخاب تاریخ شروع از تقویم فارسی">
+              <input type="text" id="filterDateTo" oninput="applyAdminFilters()" onclick="openPersianCalendarModal('to')" placeholder="تا: ۱۴۰۵/۱۲/۲۹" class="w-1/2 bg-slate-950 border border-slate-700 hover:border-amber-500 focus:border-amber-500 rounded-xl px-2 py-2 text-xs font-mono text-slate-100 outline-none cursor-pointer" title="کلیک برای انتخاب تاریخ پایان از تقویم فارسی">
+            </div>
+          </div>
+
+          <!-- فیلتر ساعت از/تا با ساعت آنالوگ تعاملی -->
+          <div class="space-y-1">
+            <div class="flex items-center justify-between">
+              <label for="filterTimeFrom" class="text-xs text-slate-300 font-medium flex items-center gap-1">
+                <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>ساعت (از - تا):</span>
+              </label>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="openAnalogClockModal('from')" class="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 transition cursor-pointer" title="تنظیم ساعت با ساعت آنالوگ">
+                  <svg class="w-3 h-3 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                  <span>ساعت آنالوگ</span>
+                </button>
+                <span class="text-slate-600">|</span>
+                <button type="button" onclick="clearTimeFilters()" class="text-[10px] text-amber-400 hover:text-amber-300 font-bold transition cursor-pointer" title="پاکسازی ساعت">پاکسازی</button>
+              </div>
+            </div>
+            <div class="flex gap-1.5" dir="ltr">
+              <input type="text" id="filterTimeFrom" readonly onclick="openAnalogClockModal('from')" placeholder="از: ۰۰:۰۰" class="w-1/2 bg-slate-950 border border-slate-700 hover:border-amber-500 focus:border-amber-500 rounded-xl px-1.5 sm:px-2 py-2 text-xs font-mono text-center text-amber-300 outline-none cursor-pointer" title="کلیک برای تنظیم از ساعت با ساعت آنالوگ">
+              <input type="text" id="filterTimeTo" readonly onclick="openAnalogClockModal('to')" placeholder="تا: ۲۳:۵۹" class="w-1/2 bg-slate-950 border border-slate-700 hover:border-amber-500 focus:border-amber-500 rounded-xl px-1.5 sm:px-2 py-2 text-xs font-mono text-center text-amber-300 outline-none cursor-pointer" title="کلیک برای تنظیم تا ساعت با ساعت آنالوگ">
             </div>
           </div>
         </div>
@@ -1340,21 +1622,28 @@
         </div>
       </div>
 
-      <!-- جدول ریسپانسیو گزارش‌ها -->
+      <!-- جدول ریسپانسیو گزارش‌ها با نمایش کامل تمامی ۱۴ فیلد اطلاعاتی -->
       <div class="bg-slate-900/90 rounded-2xl border border-slate-800 shadow-xl overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="overflow-x-auto custom-scroll">
           <table class="w-full text-right text-xs">
-            <thead class="bg-slate-950/80 text-slate-400 border-b border-slate-800 font-bold">
+            <thead class="bg-slate-950/90 text-slate-300 border-b border-slate-800 font-bold select-none">
               <tr>
-                <th class="p-3 text-center w-12">#</th>
-                <th class="p-3">تاریخ و زمان</th>
-                <th class="p-3">مجری (شماره پرسنلی)</th>
-                <th class="p-3">واحد خدمتی</th>
-                <th class="p-3">نوع فعالیت</th>
-                <th class="p-3">کدهای تجهیز</th>
-                <th class="p-3 text-center">وضعیت</th>
-                <th class="p-3 text-center">تصویر</th>
-                <th class="p-3 text-center">عملیات</th>
+                <th class="p-3 text-center w-12 shrink-0">#</th>
+                <th class="p-3 whitespace-nowrap">شماره پرسنلی</th>
+                <th class="p-3 whitespace-nowrap">نام و نام خانوادگی</th>
+                <th class="p-3 whitespace-nowrap">سرپرستی</th>
+                <th class="p-3 whitespace-nowrap">واحد</th>
+                <th class="p-3 whitespace-nowrap">سمت سازمانی</th>
+                <th class="p-3 whitespace-nowrap font-mono">ASETT ID</th>
+                <th class="p-3 whitespace-nowrap font-mono">Rebuildble ID</th>
+                <th class="p-3 whitespace-nowrap min-w-[200px]">نوع اقدام / فعالیت و اطلاعات</th>
+                <th class="p-3 whitespace-nowrap min-w-[150px]">مدت زمان (دستی/اتوماتیک)</th>
+                <th class="p-3 min-w-[180px]">توضیحات تکمیلی</th>
+                <th class="p-3 min-w-[140px]">همکاران همراه</th>
+                <th class="p-3 text-center whitespace-nowrap">تصویر تجهیز و محیط کار</th>
+                <th class="p-3 whitespace-nowrap">زمان و تاریخ ثبت</th>
+                <th class="p-3 whitespace-nowrap min-w-[150px]">موقعیت مکانی خودکار</th>
+                <th class="p-3 text-center whitespace-nowrap sticky left-0 bg-slate-950 shadow-md">عملیات</th>
               </tr>
             </thead>
             <tbody id="reportsTableBody">
@@ -1985,7 +2274,7 @@
       <form id="adminLoginForm" class="space-y-3">
         <div class="space-y-1">
           <label for="loginUsername" class="block text-xs font-bold text-slate-300">نام کاربری:</label>
-          <input type="text" id="loginUsername" required placeholder="نام کاربری..." class="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-slate-100 outline-none">
+          <input type="text" id="loginUsername" required placeholder="نام کاربری (admin یا 417734)..." class="w-full bg-slate-950 border border-slate-700 focus:border-amber-500 rounded-xl px-3.5 py-2.5 text-sm font-mono text-slate-100 outline-none">
         </div>
 
         <div class="space-y-1">
@@ -2181,6 +2470,105 @@
     </div>
   </div>
 
+  <!-- مودال اختصاصی اندازه‌گیری زمان و کرنومتر صنعتی فعالیت (Stopwatch Modal) -->
+  <div id="stopwatchModal" onclick="if(event.target === this) closeStopwatchModal()" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-md shadow-2xl p-5 sm:p-6 space-y-4 text-slate-100 relative my-auto">
+      <!-- هاله نورانی پس‌زمینه -->
+      <div class="absolute -top-16 -right-16 w-48 h-48 rounded-full bg-cyan-500/10 blur-2xl pointer-events-none"></div>
+      <div class="absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-amber-500/10 blur-2xl pointer-events-none"></div>
+
+      <!-- هدر مودال -->
+      <div class="relative flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2.5">
+          <div class="w-10 h-10 rounded-2xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center border border-cyan-500/30 shrink-0">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm sm:text-base font-black text-white">کرنومتر دیجیتال ثبت زمان فعالیت</h3>
+            <p class="text-[11px] text-emerald-400 font-semibold flex items-center gap-1 mt-0.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>ثبت خودکار زمان در فرم با شروع و توقف</span>
+            </p>
+          </div>
+        </div>
+        <button type="button" onclick="closeStopwatchModal()" class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition cursor-pointer" title="بستن و ثبت خودکار">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- راهنمای ثبت خودکار زمان -->
+      <div class="bg-cyan-950/40 border border-cyan-500/30 rounded-2xl p-2.5 flex items-center justify-between text-xs text-cyan-200">
+        <span class="flex items-center gap-1.5 text-[11px] sm:text-xs">
+          <svg class="w-4 h-4 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>زمان این کرنومتر به‌صورت <strong>کاملاً خودکار</strong> در فرم فعالیت درج و ذخیره می‌گردد.</span>
+        </span>
+      </div>
+
+      <!-- نمایشگر دیجیتال بزرگ کرنومتر صنعتی با چینش استاندارد LTR (ساعت : دقیقه : ثانیه . صدم‌ثانیه) -->
+      <div class="relative bg-slate-950/90 border border-slate-800 rounded-3xl p-5 text-center shadow-inner space-y-2">
+        <div class="flex items-baseline justify-center gap-1 font-mono tracking-wider select-none" dir="ltr">
+          <span id="swHours" class="text-4xl sm:text-5xl font-black text-amber-400 font-mono">00</span>
+          <span class="text-3xl sm:text-4xl font-black text-amber-500/70 select-none">:</span>
+          <span id="swMinutes" class="text-4xl sm:text-5xl font-black text-amber-400 font-mono">00</span>
+          <span class="text-3xl sm:text-4xl font-black text-amber-500/70 animate-pulse select-none">:</span>
+          <span id="swSeconds" class="text-4xl sm:text-5xl font-black text-amber-400 font-mono">00</span>
+          <span class="text-xl sm:text-2xl font-bold text-cyan-400/80 select-none">.</span>
+          <span id="swMillis" class="text-xl sm:text-2xl font-bold text-cyan-400 font-mono">00</span>
+        </div>
+        <div class="flex items-center justify-center gap-2 text-xs">
+          <span id="swStatusDot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+          <span id="swStatusText" class="text-slate-400 font-medium">آماده زمان‌سنجی (ثبت خودکار فعال است)</span>
+        </div>
+      </div>
+
+      <!-- دکمه‌های اصلی کنترل کرنومتر -->
+      <div class="space-y-2.5 pt-1">
+        <!-- دکمه بزرگ شروع/توقف -->
+        <button type="button" id="swStartPauseBtn" onclick="toggleStopwatchStartPause()" class="w-full py-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-98 text-slate-950 font-black text-base rounded-2xl flex items-center justify-center gap-2 shadow-xl shadow-emerald-500/25 transition cursor-pointer">
+          <svg id="swStartIcon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <svg id="swPauseIcon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span id="swStartPauseText">شروع اندازه‌گیری زمان (ثبت خودکار)</span>
+        </button>
+
+        <!-- دو دکمه عملیاتی: صفر کردن و ثبت قطعی -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <button type="button" id="swResetBtn" onclick="resetStopwatch()" class="py-3 px-3 bg-slate-800 hover:bg-red-950/60 active:scale-95 text-red-300 border border-slate-700 hover:border-red-500/60 font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 shadow-sm transition cursor-pointer" title="صفر کردن زمان کرنومتر">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>صفر کردن (RESET)</span>
+          </button>
+
+          <button type="button" id="swSaveBtn" onclick="applyStopwatchTimeToForm()" class="py-3 px-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 active:scale-95 text-slate-950 font-black text-xs sm:text-sm rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 transition cursor-pointer" title="تأیید و ذخیره زمان در فرم">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+            <span>تأیید و بستن (ذخیره)</span>
+          </button>
+        </div>
+
+        <!-- بخش کشویی اختیاری: تنظیم زمان دلخواه اولیه -->
+        <details class="group bg-slate-950/50 border border-slate-800 rounded-2xl p-2.5 text-xs">
+          <summary class="cursor-pointer text-slate-400 hover:text-slate-200 font-bold flex items-center justify-between select-none">
+            <span>تنظیم دستی زمان دلخواه اولیه در کرنومتر (اختیاری)</span>
+            <span class="text-slate-500 text-[10px] group-open:rotate-180 transition-transform">▼</span>
+          </summary>
+          <div class="pt-2.5 space-y-2">
+            <div class="flex items-center gap-1.5" dir="ltr">
+              <input type="number" id="swSetHoursInput" min="0" max="999" placeholder="ساعت" class="flex-1 bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl px-2 py-1.5 text-center font-mono text-xs sm:text-sm text-cyan-300 outline-none">
+              <span class="text-slate-500 font-bold select-none">:</span>
+              <input type="number" id="swSetMinutesInput" min="0" max="59" placeholder="دقیقه" class="flex-1 bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl px-2 py-1.5 text-center font-mono text-xs sm:text-sm text-cyan-300 outline-none">
+              <span class="text-slate-500 font-bold select-none">:</span>
+              <input type="number" id="swSetSecondsInput" min="0" max="59" placeholder="ثانیه" class="flex-1 bg-slate-900 border border-slate-700 focus:border-cyan-400 rounded-xl px-2 py-1.5 text-center font-mono text-xs sm:text-sm text-cyan-300 outline-none">
+            </div>
+            <button type="button" onclick="handleStopwatchSet()" class="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-bold rounded-lg text-xs transition">
+              بارگذاری مقادیر بالا در کرنومتر (SET)
+            </button>
+          </div>
+        </details>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ۴. مودال مشاهده جزئیات کامل رکورد -->
   <div id="reportDetailModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-xl shadow-2xl p-5 space-y-4 my-8">
@@ -2206,13 +2594,221 @@
     </div>
   </div>
 
+  <!-- مودال ۱: تقویم فارسی هوشمند برای فیلتر تاریخ از - تا -->
+  <div id="persianCalendarModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-md shadow-2xl p-4 sm:p-5 space-y-4 my-auto">
+      
+      <!-- سربرگ تقویم -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-amber-400">تقویم هجری شمسی</h3>
+            <p class="text-[11px] text-slate-400">فیلتر بازه تاریخی گزارش‌ها و کارتابل</p>
+          </div>
+        </div>
+        <button type="button" onclick="closePersianCalendarModal()" class="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- تب‌های انتخاب تاریخ شروع و تاریخ پایان -->
+      <div class="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+        <button type="button" id="calTabFromBtn" onclick="switchCalendarTarget('from')" class="py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 bg-amber-500 text-slate-950 shadow">
+          <span>از تاریخ:</span>
+          <span id="calPreviewFrom" class="font-mono text-[11px] font-black">---</span>
+        </button>
+        <button type="button" id="calTabToBtn" onclick="switchCalendarTarget('to')" class="py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200">
+          <span>تا تاریخ:</span>
+          <span id="calPreviewTo" class="font-mono text-[11px] font-black">---</span>
+        </button>
+      </div>
+
+      <!-- ناوبری ماه و سال -->
+      <div class="flex items-center justify-between bg-slate-950/80 px-3 py-2 rounded-xl border border-slate-800/80 text-xs">
+        <button type="button" onclick="navigateCalendarMonth(-1)" class="p-1.5 hover:bg-slate-800 text-amber-400 rounded-lg transition" title="ماه قبل">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+
+        <div class="flex items-center gap-2">
+          <select id="calMonthSelect" onchange="onCalendarSelectChange()" class="bg-slate-900 border border-slate-700 text-amber-300 font-bold text-xs rounded-lg px-2.5 py-1.5 outline-none cursor-pointer focus:border-amber-500">
+            <option value="1">فروردین</option>
+            <option value="2">اردیبهشت</option>
+            <option value="3">خرداد</option>
+            <option value="4">تیر</option>
+            <option value="5">مرداد</option>
+            <option value="6">شهریور</option>
+            <option value="7">مهر</option>
+            <option value="8">آبان</option>
+            <option value="9">آذر</option>
+            <option value="10">دی</option>
+            <option value="11">بهمن</option>
+            <option value="12">اسفند</option>
+          </select>
+
+          <select id="calYearSelect" onchange="onCalendarSelectChange()" class="bg-slate-900 border border-slate-700 text-amber-300 font-mono font-bold text-xs rounded-lg px-2.5 py-1.5 outline-none cursor-pointer focus:border-amber-500">
+            <!-- سال‌های شمسی -->
+          </select>
+        </div>
+
+        <button type="button" onclick="navigateCalendarMonth(1)" class="p-1.5 hover:bg-slate-800 text-amber-400 rounded-lg transition" title="ماه بعد">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+        </button>
+      </div>
+
+      <!-- شبکه روزهای تقویم -->
+      <div class="space-y-1.5">
+        <div class="grid grid-cols-7 text-center text-[11px] font-bold text-slate-400 border-b border-slate-800 pb-1">
+          <span>ش</span>
+          <span>ی</span>
+          <span>د</span>
+          <span>س</span>
+          <span>چ</span>
+          <span>پ</span>
+          <span class="text-rose-400">ج</span>
+        </div>
+        <div id="calDaysGrid" class="grid grid-cols-7 gap-1 text-center text-xs font-mono min-h-[170px]">
+          <!-- روزهای ماه شمسی توسط JS تزریق می‌شوند -->
+        </div>
+      </div>
+
+      <!-- دکمه‌های بازه‌های سریع -->
+      <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-800/80">
+        <button type="button" onclick="applyQuickDatePreset('today')" class="px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[11px] text-slate-300 transition">امروز</button>
+        <button type="button" onclick="applyQuickDatePreset('yesterday')" class="px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[11px] text-slate-300 transition">دیروز</button>
+        <button type="button" onclick="applyQuickDatePreset('thisWeek')" class="px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[11px] text-slate-300 transition">هفته جاری</button>
+        <button type="button" onclick="applyQuickDatePreset('thisMonth')" class="px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[11px] text-slate-300 transition">ماه جاری</button>
+        <button type="button" onclick="applyQuickDatePreset('last30Days')" class="px-2 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[11px] text-slate-300 transition">۳۰ روز اخیر</button>
+        <button type="button" onclick="applyQuickDatePreset('clear')" class="px-2 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-[11px] text-rose-300 transition mr-auto">پاکسازی تاریخ</button>
+      </div>
+
+      <!-- دکمه‌های اقدام نهایی -->
+      <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+        <button type="button" onclick="closePersianCalendarModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition">
+          انصراف
+        </button>
+        <button type="button" onclick="confirmPersianCalendarSelection()" class="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 rounded-xl text-xs font-black shadow-lg transition">
+          تأیید و اعمال در جدول
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- مودال ۲: ساعت آنالوگ هوشمند برای فیلتر ساعت از - تا -->
+  <div id="analogClockModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-sm sm:max-w-md shadow-2xl p-4 sm:p-5 space-y-4 my-auto">
+      
+      <!-- سربرگ ساعت -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 flex items-center justify-center">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-black text-cyan-400">ساعت آنالوگ فیلتر زمانی</h3>
+            <p class="text-[11px] text-slate-400">تنظیم ساعت شروع و پایان با عقربه‌های آنالوگ</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeAnalogClockModal()" class="text-slate-400 hover:text-slate-200 p-1.5 rounded-lg hover:bg-slate-800 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- تب‌های فیلتر ساعت شروع و پایان -->
+      <div class="grid grid-cols-2 gap-2 bg-slate-950 p-1.5 rounded-2xl border border-slate-800">
+        <button type="button" id="clockTabFromBtn" onclick="switchClockTarget('from')" class="py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 bg-cyan-500 text-slate-950 shadow">
+          <span>از ساعت:</span>
+          <span id="clockPreviewFrom" class="font-mono text-xs font-black">۰۰:۰۰</span>
+        </button>
+        <button type="button" id="clockTabToBtn" onclick="switchClockTarget('to')" class="py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200">
+          <span>تا ساعت:</span>
+          <span id="clockPreviewTo" class="font-mono text-xs font-black">۲۳:۵۹</span>
+        </button>
+      </div>
+
+      <!-- انتخاب وضعیت تنظیم: ساعت یا دقیقه -->
+      <div class="flex items-center justify-center gap-2">
+        <div class="inline-flex p-1 bg-slate-950 rounded-xl border border-slate-800 text-xs">
+          <button type="button" id="clockModeHourBtn" onclick="setClockSelectionMode('hour')" class="px-3.5 py-1.5 rounded-lg font-bold transition bg-slate-800 text-cyan-300">
+            تنظیم ساعت
+          </button>
+          <button type="button" id="clockModeMinuteBtn" onclick="setClockSelectionMode('minute')" class="px-3.5 py-1.5 rounded-lg font-bold transition text-slate-400 hover:text-slate-200">
+            تنظیم دقیقه
+          </button>
+        </div>
+
+        <!-- نمایش دیجیتالی مقدار در حال تنظیم -->
+        <div class="font-mono text-base font-black px-3 py-1 bg-slate-950 rounded-xl border border-slate-800 text-amber-300" id="clockActiveDisplay">
+          08:00
+        </div>
+      </div>
+
+      <!-- صفحه ساعت آنالوگ تعاملی -->
+      <div class="relative flex items-center justify-center py-1">
+        <div id="analogClockContainer" class="relative w-56 h-56 sm:w-64 sm:h-64 rounded-full bg-slate-950 border-4 border-slate-800 shadow-2xl flex items-center justify-center select-none cursor-pointer">
+          <svg id="analogClockSvg" viewBox="0 0 240 240" class="w-full h-full">
+            <!-- صفحه پس‌زمینه ساعت -->
+            <circle cx="120" cy="120" r="114" fill="#090d16" stroke="#1e293b" stroke-width="3" />
+            <circle cx="120" cy="120" r="110" fill="none" stroke="#334155" stroke-dasharray="1 9.42" stroke-width="2" />
+            
+            <!-- عقربه ساعت (کوتاه‌تر) -->
+            <line id="clockHourHand" x1="120" y1="120" x2="120" y2="65" stroke="#f59e0b" stroke-width="5" stroke-linecap="round" />
+            
+            <!-- عقربه دقیقه (بلندتر) -->
+            <line id="clockMinuteHand" x1="120" y1="120" x2="120" y2="38" stroke="#06b6d4" stroke-width="3" stroke-linecap="round" />
+            
+            <!-- پین مرکزی ساعت -->
+            <circle cx="120" cy="120" r="7" fill="#f59e0b" stroke="#020617" stroke-width="2" />
+            <circle cx="120" cy="120" r="2.5" fill="#020617" />
+            
+            <!-- عناصر اعداد ساعت یا دقیقه توسط JS تزریق می‌شوند -->
+            <g id="clockNumbersGroup"></g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- دکمه‌های استپر سریع (+ و -) -->
+      <div class="flex items-center justify-center gap-1 text-[11px] font-mono">
+        <button type="button" onclick="adjustClockValue(-1, 'hour')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">-۱ ساعت</button>
+        <button type="button" onclick="adjustClockValue(1, 'hour')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">+۱ ساعت</button>
+        <span class="text-slate-600 px-1">|</span>
+        <button type="button" onclick="adjustClockValue(-5, 'minute')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">-۵ دقیقه</button>
+        <button type="button" onclick="adjustClockValue(5, 'minute')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition">+۵ دقیقه</button>
+      </div>
+
+      <!-- پیش‌تنظیم شیفت‌های کاری صنعتی -->
+      <div class="flex flex-wrap gap-1.5 pt-2 border-t border-slate-800/80">
+        <button type="button" onclick="applyClockShiftPreset('07:00', '15:00')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 transition">شیفت صبح (۰۷ الی ۱۵)</button>
+        <button type="button" onclick="applyClockShiftPreset('15:00', '23:00')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 transition">شیفت عصر (۱۵ الی ۲۳)</button>
+        <button type="button" onclick="applyClockShiftPreset('23:00', '07:00')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-cyan-300 transition">شیفت شب (۲۳ الی ۰۷)</button>
+        <button type="button" onclick="applyClockShiftPreset('07:30', '14:30')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-amber-300 transition">اداری (۰۷:۳۰ الی ۱۴:۳۰)</button>
+        <button type="button" onclick="applyClockShiftPreset('00:00', '23:59')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 transition">کل ۲۴ ساعت</button>
+        <button type="button" onclick="clearClockFilter()" class="px-2 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 border border-rose-800/60 text-[11px] text-rose-300 transition mr-auto">پاکسازی ساعت</button>
+      </div>
+
+      <!-- دکمه‌های تأیید و انصراف -->
+      <div class="flex items-center justify-between gap-2 pt-2 border-t border-slate-800">
+        <button type="button" onclick="closeAnalogClockModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold transition">
+          انصراف
+        </button>
+        <button type="button" onclick="confirmAnalogClockSelection()" class="px-5 py-2 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 text-slate-950 rounded-xl text-xs font-black shadow-lg transition">
+          تأیید و اعمال فیلتر ساعت
+        </button>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ۵. مودال جامع راهنما و نصب PWA (اندروید گوگل کروم، رایانه و ویندوز، و iOS سافاری) -->
   <div id="pwaInstallModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-5 space-y-4 text-slate-100 shadow-2xl">
       <div class="flex items-center justify-between border-b border-slate-800 pb-3">
         <div class="flex items-center gap-2.5">
           <div class="w-10 h-10 rounded-xl bg-slate-950 p-1 flex items-center justify-center shrink-0 border border-slate-700">
-            <img src="/app-logo.png?v=5" class="w-8 h-8 rounded-lg object-contain" alt="لوگو">
+            <img src="/app-logo.png?v=6" onerror="if(!this.dataset.tried){this.dataset.tried=1;this.src='/app-logo.png';}" class="w-8 h-8 rounded-lg object-contain" alt="لوگو">
           </div>
           <div>
             <h3 class="text-sm font-bold text-white">نصب سامانه ثبت گراف (PWA)</h3>
@@ -2421,6 +3017,167 @@
     </div>
   </div>
 
+  <!-- =========================================================================
+       صفحه اختصاصی درباره سامانه و شناسنامه نرم‌افزار
+       (اسلاید ۵ ثانیه‌ای ورود داده به دیتابیس با آیکون چرخشی + صفحه متن شناسنامه)
+       ========================================================================= -->
+  <div id="aboutSystemModal" class="hidden fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/98 backdrop-blur-2xl p-4 select-none overflow-y-auto" style="background: #020617 !important;">
+    <!-- نورهای پس‌زمینه صنعتی -->
+    <div class="absolute -top-32 -right-32 w-96 h-96 rounded-full blur-3xl pointer-events-none" style="background: rgba(245, 158, 11, 0.12);"></div>
+    <div class="absolute -bottom-32 -left-32 w-96 h-96 rounded-full blur-3xl pointer-events-none" style="background: rgba(6, 182, 212, 0.12);"></div>
+
+    <!-- فاز ۱: اسلاید ۵ ثانیه‌ای ورود اطلاعات به نماد دیتابیس با آیکون چرخشی -->
+    <div id="aboutSlidePhase" class="relative z-10 w-full max-w-xl flex flex-col items-center justify-center text-center p-4 sm:p-6 space-y-6 transition-all duration-500">
+      
+      <!-- برچسب وضعیت در بالای اسلاید -->
+      <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-mono shadow-lg shadow-cyan-950/50">
+        <span class="w-2 h-2 rounded-full bg-cyan-400 animate-ping"></span>
+        <span>ورود و ثبت اطلاعات در پایگاه داده جامع...</span>
+      </div>
+
+      <!-- محفظه بصری: آیکون چرخشی برنامه -> جریان داده -> نماد دیتابیس -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-5 sm:gap-7 my-2 w-full">
+        
+        <!-- ۱. آیکون برنامه در حال چرخش -->
+        <div class="flex flex-col items-center gap-2">
+          <div class="relative w-28 h-28 sm:w-32 sm:h-32 rounded-3xl bg-slate-900 border-2 border-amber-500/70 p-3 shadow-2xl shadow-amber-500/25 flex items-center justify-center about-icon-rotating overflow-hidden">
+            <img src="/app-logo.png?v=6" onerror="if(!this.dataset.tried){this.dataset.tried=1;this.src='/app-logo.png';}" alt="آیکون برنامه" class="w-full h-full object-contain filter drop-shadow-lg">
+          </div>
+          <span class="text-xs font-black text-amber-300">نرم‌افزار ثبت فعالیت‌ها</span>
+        </div>
+
+        <!-- ۲. جریان متحرک ذرات و انتقال داده‌ها به سمت دیتابیس -->
+        <div class="flex flex-col items-center gap-2 w-32 sm:w-40 py-2">
+          <div class="text-[11px] font-mono text-cyan-300 font-bold flex items-center gap-1.5 animate-pulse">
+            <span>انتقال داده‌ها</span>
+            <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </div>
+          
+          <div class="relative w-full h-3.5 bg-slate-900 rounded-full border border-cyan-500/40 overflow-hidden flex items-center justify-center p-0.5 shadow-inner">
+            <div class="about-packet-anim w-8 h-2 bg-gradient-to-r from-amber-400 via-cyan-400 to-emerald-400 rounded-full shadow-md"></div>
+          </div>
+
+          <span class="text-[10px] text-slate-400 font-mono">Data Ingestion</span>
+        </div>
+
+        <!-- ۳. نماد دیتابیس با هاله نوری و وضعیت فعال -->
+        <div class="flex flex-col items-center gap-2">
+          <div class="relative w-28 h-28 sm:w-32 sm:h-32 rounded-3xl bg-slate-900 border-2 border-cyan-500/70 p-3 shadow-2xl shadow-cyan-500/25 flex flex-col items-center justify-center text-cyan-400 about-db-box-glow overflow-hidden">
+            <svg class="w-14 h-14 animate-pulse text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+            </svg>
+            <div class="flex items-center gap-1.5 mt-1 bg-slate-950/80 px-2 py-0.5 rounded-full border border-cyan-800">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+              <span class="text-[9px] font-mono text-emerald-300 font-bold">DB WRITING</span>
+            </div>
+          </div>
+          <span class="text-xs font-black text-cyan-300">دیتابیس متمرکز</span>
+        </div>
+
+      </div>
+
+      <!-- نوار بارگذاری ۵ ثانیه‌ای و شمارشگر معکوس -->
+      <div class="w-full max-w-sm space-y-2 pt-2">
+        <div class="w-full h-2.5 bg-slate-900 border border-slate-700/80 rounded-full overflow-hidden p-0.5 shadow-inner">
+          <div id="aboutSlideProgressBar" class="h-full bg-gradient-to-r from-amber-500 via-cyan-400 to-emerald-400 rounded-full transition-all duration-75" style="width: 0%;"></div>
+        </div>
+        <div class="flex items-center justify-between text-xs font-mono text-slate-400 px-1">
+          <span class="text-amber-300/90 font-sans text-[11px]">ورود اطلاعات به نماد دیتابیس</span>
+          <span id="aboutSlideCountdown" class="text-amber-400 font-bold">۵ ثانیه</span>
+        </div>
+      </div>
+
+      <!-- دکمه رد کردن اسلاید -->
+      <button type="button" onclick="transitionToAboutContent()" class="text-xs text-slate-400 hover:text-amber-300 transition px-3 py-1.5 rounded-xl border border-slate-800 bg-slate-900/80 font-medium cursor-pointer shadow">
+        رد کردن اسلاید ←
+      </button>
+
+    </div>
+
+    <!-- فاز ۲: صفحه اصلی متن معرفی و شناسنامه نرم‌افزار -->
+    <div id="aboutContentPhase" class="hidden relative z-10 w-full max-w-2xl bg-gradient-to-b from-slate-900 via-slate-900 to-slate-950 border-2 border-amber-500/50 rounded-3xl p-6 sm:p-8 shadow-2xl shadow-amber-500/20 space-y-6 opacity-0 transition-opacity duration-700 overflow-hidden">
+      
+      <!-- هدر صفحه با دکمه بستن -->
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-slate-950 p-1 border border-amber-500/40 shadow flex items-center justify-center shrink-0">
+            <img src="/app-logo.png?v=6" onerror="if(!this.dataset.tried){this.dataset.tried=1;this.src='/app-logo.png';}" alt="آیکون سیستم" class="w-full h-full object-contain">
+          </div>
+          <div>
+            <h2 class="text-base sm:text-lg font-black text-white">سامانه ثبت فعالیت‌های دوره‌ای و تعمیراتی</h2>
+            <p class="text-xs text-amber-400 font-semibold mt-0.5">مدیریت اتوماسیون و ارتباطات ذوب آهن اصفهان</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeAboutSystemPage()" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition cursor-pointer" title="بستن">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- متن اصلی شناسنامه با دیزاین فاخر و گیرا -->
+      <div class="space-y-4">
+        <div class="relative bg-slate-950/70 border-r-4 border-amber-500 p-5 sm:p-6 rounded-2xl shadow-inner">
+          <svg class="w-8 h-8 text-amber-500/30 absolute top-3 left-3" fill="currentColor" viewBox="0 0 24 24"><path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/></svg>
+          <p class="text-sm sm:text-base leading-relaxed sm:leading-loose text-slate-100 font-medium text-justify">
+            این نرم افزار جهت مکانیزه کردن و سهولت ثبت فعالیت های دوره ای و تعمیراتی در کارخانه بزرگ ذوب آهن اصفهان به ایده مهندس محسن جعفری طراحی و ساخته شده است و امید است بتواند سرعت و صحت اطلاعات تعمیراتی و دوره ای را بهبود بخشیده و تاثیر بسزایی در فرآیند تعمیرات و نگهداری سازمان داشته باشد
+          </p>
+        </div>
+
+        <!-- کارت اعتبار و مشخصات طراح و برنامه‌نویس -->
+        <div class="flex items-center gap-3.5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 shadow-md">
+          <div class="w-12 h-12 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 text-slate-950 flex items-center justify-center font-black shadow-lg shrink-0">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+          </div>
+          <div>
+            <p class="text-[11px] text-amber-400 font-bold">مهندسی نرم‌افزار و پیاده‌سازی</p>
+            <p class="text-sm sm:text-base font-black text-white mt-0.5">طراح و برنامه نویس:احسان ابوالقاسمی</p>
+          </div>
+        </div>
+
+        <!-- کارت نگارش و وضعیت بروزرسانی پروژه (ثبت نسخه) -->
+        <div class="flex items-center justify-between p-3.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="text-slate-400">نگارش پروژه:</span>
+            <span id="aboutModalVersionBadge" class="font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/30">v2.5.7</span>
+          </div>
+          <button type="button" onclick="checkAppUpdate(true)" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-semibold transition cursor-pointer shadow">
+            <svg class="w-3.5 h-3.5 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            <span>بررسی بروزرسانی</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- دکمه بازگشت به صفحه اصلی -->
+      <div class="pt-2 flex justify-end">
+        <button type="button" onclick="closeAboutSystemPage()" class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs sm:text-sm shadow-lg shadow-amber-500/25 transition active:scale-95 flex items-center justify-center gap-2 cursor-pointer">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/></svg>
+          <span>بازگشت به صفحه اصلی</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- بنر اطلاع‌رسانی نسخه جدید برای اپلیکیشن‌های نصب‌شده قدیمی و مرورگرها -->
+  <div id="pwaUpdateBanner" class="hidden fixed bottom-4 left-4 right-4 sm:left-auto sm:right-6 sm:w-96 z-[999999] p-4 rounded-2xl bg-slate-900 border-2 border-amber-500 shadow-2xl shadow-amber-500/30 text-slate-100 animate-fadeIn">
+    <div class="flex items-start gap-3">
+      <div class="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-bold shrink-0 shadow">
+        <svg class="w-5 h-5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+      </div>
+      <div class="flex-1">
+        <h4 class="text-xs font-black text-amber-300">نسخه جدید نرم‌افزار آماده است!</h4>
+        <p id="pwaUpdateMessage" class="text-[11px] text-slate-300 mt-1 leading-relaxed">نسخه جدید سامانه با آخرین امکانات منتشر شده است. جهت ارتقا و بارگذاری تغییرات کلیک کنید:</p>
+        <div class="flex items-center gap-2 mt-2.5">
+          <button type="button" onclick="applyAppUpdate()" class="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-md transition active:scale-95 cursor-pointer">
+            ⚡ بروزرسانی و دریافت نسخه جدید
+          </button>
+          <button type="button" onclick="dismissAppUpdate()" class="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs transition cursor-pointer">
+            بعداً
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- حفظ سازگاری با توابع قدیمی -->
   <div id="iosInstallModal" class="hidden"></div>
 
@@ -2439,7 +3196,7 @@
           if (session) user = JSON.parse(session);
         } catch (e) {}
       }
-      const isSuper = !user || user.username === 'admin' || user.isSuperAdmin;
+      const isSuper = !user || user.username === 'admin' || user.username === '417734' || user.username === '417737' || user.isSuperAdmin;
 
       const canOrg = isSuper || !!(user && user.permissions && user.permissions.orgManage);
       const canAdmin = isSuper || !!(user && user.permissions && user.permissions.adminManage);
@@ -2517,6 +3274,87 @@
         return confirmDeleteReport(id);
       }
     };
+
+    // مدیریت اسلاید ۵ ثانیه‌ای و نمایش صفحه شناسنامه سیستم
+    let aboutSlideTimer = null;
+    let aboutProgressInterval = null;
+
+    window.openAboutSystemPage = function() {
+      const modal = document.getElementById('aboutSystemModal');
+      const slidePhase = document.getElementById('aboutSlidePhase');
+      const contentPhase = document.getElementById('aboutContentPhase');
+      const progressBar = document.getElementById('aboutSlideProgressBar');
+      const countdownEl = document.getElementById('aboutSlideCountdown');
+
+      if (!modal || !slidePhase || !contentPhase) return;
+
+      if (aboutSlideTimer) clearTimeout(aboutSlideTimer);
+      if (aboutProgressInterval) clearInterval(aboutProgressInterval);
+
+      modal.classList.remove('hidden');
+      slidePhase.classList.remove('hidden', 'opacity-0');
+      slidePhase.classList.add('flex', 'opacity-100');
+      contentPhase.classList.add('hidden', 'opacity-0');
+      contentPhase.classList.remove('flex', 'opacity-100');
+
+      if (progressBar) progressBar.style.width = '0%';
+      if (countdownEl) countdownEl.textContent = '۵ ثانیه';
+
+      const startTime = Date.now();
+      const totalDuration = 5000;
+
+      aboutProgressInterval = setInterval(function() {
+        const elapsed = Date.now() - startTime;
+        const remaining = Math.max(0, Math.ceil((totalDuration - elapsed) / 1000));
+        const percent = Math.min(100, (elapsed / totalDuration) * 100);
+
+        if (progressBar) progressBar.style.width = percent + '%';
+        if (countdownEl) countdownEl.textContent = remaining + ' ثانیه';
+
+        if (elapsed >= totalDuration) {
+          clearInterval(aboutProgressInterval);
+          window.transitionToAboutContent();
+        }
+      }, 50);
+
+      aboutSlideTimer = setTimeout(function() {
+        window.transitionToAboutContent();
+      }, totalDuration);
+    };
+
+    window.transitionToAboutContent = function() {
+      if (aboutSlideTimer) clearTimeout(aboutSlideTimer);
+      if (aboutProgressInterval) clearInterval(aboutProgressInterval);
+
+      const slidePhase = document.getElementById('aboutSlidePhase');
+      const contentPhase = document.getElementById('aboutContentPhase');
+      if (!slidePhase || !contentPhase) return;
+
+      slidePhase.classList.remove('opacity-100');
+      slidePhase.classList.add('opacity-0');
+
+      setTimeout(function() {
+        slidePhase.classList.add('hidden');
+        slidePhase.classList.remove('flex');
+
+        contentPhase.classList.remove('hidden');
+        contentPhase.classList.add('flex');
+        setTimeout(function() {
+          contentPhase.classList.remove('opacity-0');
+          contentPhase.classList.add('opacity-100');
+        }, 30);
+      }, 400);
+    };
+
+    window.closeAboutSystemPage = function() {
+      if (aboutSlideTimer) clearTimeout(aboutSlideTimer);
+      if (aboutProgressInterval) clearInterval(aboutProgressInterval);
+
+      const modal = document.getElementById('aboutSystemModal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+    };
   </script>
 
   <!-- بارگذاری کتابخانه پردازش اکسل آفلاین (SheetJS) -->
@@ -2524,6 +3362,6 @@
   <!-- بارگذاری اطلاعات اولیه پرسنل از فایل استخراج‌شده از اکسل -->
   <script src="personnel-data.js?v=3"></script>
   <!-- بارگذاری هسته منطق، دیتابیس IndexedDB و عملیات PWA با شناسه نسخه -->
-  <script src="app.js?v=2.9.1"></script>
+  <script src="app.js?v=2.9.4"></script>
 </body>
 </html>

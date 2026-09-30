@@ -3,16 +3,20 @@
  * طراحی شده برای کارکرد ۱۰۰٪ آفلاین بر روی اندروید، ویندوز و مرورگرهای مدرن (PWA)
  */
 
-const CACHE_NAME = 'automation-graph-pwa-v24';
-const CORE_ASSETS = [
+// نسخه سراسری پروژه - با تغییر این متغیر، اپلیکیشن‌های نصب‌شده قدیمی نسخه جدید را شناسایی و ارتقا می‌دهند
+var APP_VERSION = '2.5.7';
+var CACHE_NAME = `automation-graph-pwa-v${APP_VERSION}`;
+var CORE_ASSETS = [
   '/',
   '/index.html',
   '/app.js',
   '/manifest.json',
+  '/version.json',
   '/xlsx.full.min.js',
   '/personnel-data.json',
   '/personnel-data.js',
   '/app-logo.png',
+  '/icon.png',
   '/icon.svg',
   '/icon-192.png',
   '/icon-512.png',
@@ -78,15 +82,9 @@ self.addEventListener('fetch', (event) => {
           const cached = await caches.match(event.request, { ignoreSearch: true });
           if (cached) return cached;
           if (event.request.mode === 'navigate') {
-            return (await caches.match('/index.html')) || (await caches.match('/'));
+            return (await caches.match('/index.html', { ignoreSearch: true })) || (await caches.match('/', { ignoreSearch: true }));
           }
-          if (url.pathname.includes('personnel-data')) {
-            return (await caches.match('/personnel-data.js')) || (await caches.match('/personnel-data.json'));
-          }
-          if (url.pathname.includes('xlsx')) {
-            return await caches.match('/xlsx.full.min.js');
-          }
-          return await caches.match('/app.js');
+          return (await caches.match('/app.js', { ignoreSearch: true }));
         })
     );
     return;
@@ -103,11 +101,15 @@ self.addEventListener('fetch', (event) => {
         return networkResponse;
       })
       .catch(async () => {
-        const cached = await caches.match(event.request);
+        const cached = await caches.match(event.request, { ignoreSearch: true });
         if (cached) return cached;
-        if (event.request.destination === 'image') {
-          return (await caches.match('/icon-192.png')) || (await caches.match('/icon.svg'));
+        if (event.request.destination === 'image' || url.pathname.match(/\.(png|jpg|jpeg|svg|webp|ico)$/i)) {
+          return (await caches.match('/app-logo.png', { ignoreSearch: true })) ||
+                 (await caches.match('/icon.png', { ignoreSearch: true })) ||
+                 (await caches.match('/icon-192.png', { ignoreSearch: true })) ||
+                 (await caches.match('/icon.svg', { ignoreSearch: true }));
         }
+        return new Response('', { status: 408, statusText: 'Offline Asset Unavailable' });
       })
   );
 });

@@ -3,6 +3,10 @@
  * سازگار با Cloudflare Pages، PWA و کارکرد ۱۰۰٪ آفلاین (Offline-First)
  */
 
+// نسخه رسمی و سراسری پروژه - پس از هر بار تغییرات، این نسخه تغییر می‌یابد تا برنامه‌های نصب‌شده قدیمی بروزرسانی شوند
+var APP_VERSION = '2.5.7';
+window.APP_VERSION = APP_VERSION;
+
 // ==========================================
 // ۱. تبدیل تاریخ میلادی به هجری شمسی (Jalali)
 // ==========================================
@@ -52,8 +56,8 @@ window.escapeHtml = escapeHtml;
 // ==========================================
 // ۲. مدیریت دیتابیس محلی (IndexedDB)
 // ==========================================
-const DB_NAME = 'AutomationGraphDB';
-const DB_VERSION = 7;
+var DB_NAME = 'AutomationGraphDB';
+var DB_VERSION = 7;
 
 function openDB() {
   return new Promise((resolve, reject) => {
@@ -628,7 +632,15 @@ function handleActivityChange() {
     // طبق درخواست کاربر فیلد شماره شناسایی تجهیز برای این فعالیت‌ها حذف گردید
     if (equipIdGroup) equipIdGroup.classList.add('hidden');
     if (equipInput) equipInput.required = false;
-  } else if (val === 'انجام تنظیمات حرفه‌ای' || val === 'انجام تنظیمات و فعالیت‌های حرفه‌ای' || val === 'انجام فعالیت‌های حرفه‌ای') {
+  } else if (
+    val === 'انجام تنظیمات confing/calib (همراه شماره مرجع)' ||
+    val === 'انجام تنظیمات conf/calib' ||
+    val.includes('conf') ||
+    val.includes('calib') ||
+    val === 'انجام تنظیمات حرفه‌ای' ||
+    val === 'انجام تنظیمات و فعالیت‌های حرفه‌ای' ||
+    val === 'انجام فعالیت‌های حرفه‌ای'
+  ) {
     if (settingsGroup) {
       settingsGroup.classList.remove('hidden');
       if (refTool) refTool.required = true;
@@ -650,10 +662,10 @@ function handleActivityChange() {
 }
 
 function addSelectedActivity() {
-  // ۱. اعتبارسنجی قطعی: بدون تعیین قطعه قابل بازسازی (Rebuildable ID) نباید بتوان فعالیت اضافه کرد
+  // ۱. اعتبارسنجی قطعی: بدون تعیین قطعه قابل بازسازی (Rebuildable ID) نباید بتوان فعالیت اضافه کرد (حالت دستی حذف شد)
   const rebuildableVal = getSelectedRebuildableValue();
   if (!rebuildableVal) {
-    showToast('⚠️ بدون مشخص بودن قطعه قابل بازسازی (Rebuildable ID)، امکان افزودن فعالیت وجود ندارد. لطفاً ابتدا در کادر بالا قطعه را انتخاب یا ثبت فرمایید.', 'error');
+    showToast('⚠️ لطفاً ابتدا قطعه قابل بازسازی (Rebuildable ID) را از لیست کشویی دیتابیس انتخاب فرمایید.', 'error');
     const sel = document.getElementById('rebuildableSelect');
     if (sel && !sel.disabled) {
       sel.focus();
@@ -694,7 +706,15 @@ function addSelectedActivity() {
 
   if (val === 'مونتاژ تجهیزات' || val === 'دمونتاژ تجهیزات') {
     // طبق درخواست کاربر فیلد شماره شناسایی تجهیز حذف گردید
-  } else if (val === 'انجام تنظیمات حرفه‌ای' || val === 'انجام تنظیمات و فعالیت‌های حرفه‌ای' || val === 'انجام فعالیت‌های حرفه‌ای') {
+  } else if (
+    val === 'انجام تنظیمات confing/calib (همراه شماره مرجع)' ||
+    val === 'انجام تنظیمات conf/calib' ||
+    val.includes('conf') ||
+    val.includes('calib') ||
+    val === 'انجام تنظیمات حرفه‌ای' ||
+    val === 'انجام تنظیمات و فعالیت‌های حرفه‌ای' ||
+    val === 'انجام فعالیت‌های حرفه‌ای'
+  ) {
     const refTool = document.getElementById('referenceToolInput')?.value.trim();
     if (!refTool) {
       showToast('لطفاً شماره مرجع (لپ‌تاپ، هارت، کالیبراتور) را وارد فرمایید', 'error');
@@ -725,10 +745,18 @@ function addSelectedActivity() {
     return;
   }
 
+  // استخراج توضیحات قطعه از ویژگی‌های گزینه انتخابی
+  let rebuildableDesc = '';
+  const selEl = document.getElementById('rebuildableSelect');
+  if (selEl && selEl.selectedIndex >= 0) {
+    rebuildableDesc = (selEl.options[selEl.selectedIndex]?.getAttribute('data-desc') || '').trim();
+  }
+
   const activityItem = {
     id: Date.now() + Math.random().toString(36).substring(2, 6),
     type: val,
     rebuildable: rebuildableVal,
+    rebuildableDesc: rebuildableDesc,
     asett: document.getElementById('asettInput')?.value.trim() || '',
     conditionalFields
   };
@@ -800,10 +828,13 @@ function renderAddedActivitiesList() {
 
     const itemEl = document.createElement('div');
     itemEl.className = 'flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950/90 border border-slate-700/90 shadow-sm hover:border-slate-600 transition';
+    const rebuildableText = act.rebuildableDesc
+      ? `${act.rebuildable} - ${act.rebuildableDesc}`
+      : act.rebuildable;
     const rebuildableBadge = act.rebuildable
       ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-500/50 text-[11px] font-bold text-cyan-300">
           <svg class="w-3 h-3 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-          <span>قطعه: ${escapeHtml(act.rebuildable)}</span>
+          <span>قطعه: ${escapeHtml(rebuildableText)}</span>
         </span>`
       : '';
 
@@ -900,7 +931,8 @@ function toEnglishDigits(str) {
 window.toEnglishDigits = toEnglishDigits;
 
 // مپ جامع پرسنل با تضمین دسترسی فوق‌سریع و بدون وقفه به کل ۷۵۲۷ رکورد
-const masterPersonnelMap = new Map();
+var masterPersonnelMap = window.masterPersonnelMap || new Map();
+window.masterPersonnelMap = masterPersonnelMap;
 
 function indexPersonnelRecords(records) {
   if (!records || !Array.isArray(records)) return;
@@ -1266,8 +1298,8 @@ async function loadPersonnelData() {
 // ==========================================
 // ۶. دریافت و ثبت خودکار موقعیت مکانی (GPS) با بروزرسانی هر ۱۰ ثانیه
 // ==========================================
-let gpsAutoUpdateInterval = null;
-let gpsWatchId = null;
+var gpsAutoUpdateInterval = null;
+var gpsWatchId = null;
 
 function applyGpsPosition(position) {
   if (!position || !position.coords) return;
@@ -1747,8 +1779,81 @@ function handleAsettInput(inputEl) {
 // ==========================================
 // ۸.۱. منطق فرم کشویی قطعه قابل بازسازی (Rebuildable ID) و اتصال به دیتابیس ASETT
 // ==========================================
-async function getOrFetchAllAssetRebuildables() {
-  if (window.AppState.assetRecords && window.AppState.assetRecords.length > 0) {
+var DEFAULT_ASSET_REBUILDABLES = [
+  {
+    asset: '41030DEMO',
+    rebuildable: 'SD#14',
+    description: 'دتکتور دوداتاق برق  سرپرستی مخابرات   واحد:واحد اعلام حریق',
+    supervision: 'سرپرستی مخابرات',
+    unit: 'واحد اعلام حریق',
+    createdAt: '2026-09-30T00:00:00.000Z'
+  },
+  {
+    asset: '14031DEM0',
+    rebuildable: 'HD#15',
+    description: 'دتکتور حرارت اتاق برق  سرپریتی مخابرات   واحد اعلام حریق',
+    supervision: 'سرپرستی مخابرات',
+    unit: 'واحد اعلام حریق',
+    createdAt: '2026-09-30T00:00:00.000Z'
+  }
+];
+
+async function ensureDefaultAssetRebuildables(existingRecords) {
+  let records = Array.isArray(existingRecords) ? [...existingRecords] : [];
+  let updated = false;
+
+  for (const def of DEFAULT_ASSET_REBUILDABLES) {
+    const normDefAsset = (def.asset || '').trim().toUpperCase();
+    const normDefRebuild = (def.rebuildable || '').trim().toUpperCase();
+
+    const existingIndex = records.findIndex(r => {
+      const a = (r.asset || '').trim().toUpperCase();
+      const reb = (r.rebuildable || '').trim().toUpperCase();
+      return a === normDefAsset && reb === normDefRebuild;
+    });
+
+    if (existingIndex < 0) {
+      const itemToSave = {
+        ...def,
+        createdAt: def.createdAt || new Date().toISOString()
+      };
+      try {
+        const id = await saveAssetRebuildableRecordToDB(itemToSave);
+        itemToSave.id = id;
+      } catch (e) {
+        itemToSave.id = Date.now() + Math.floor(Math.random() * 1000);
+      }
+      records.push(itemToSave);
+      updated = true;
+    } else {
+      // بروزرسانی توضیحات و فیلدهای پیش‌فرض در صورت تغییر
+      const current = records[existingIndex];
+      if (current.description !== def.description || current.supervision !== def.supervision || current.unit !== def.unit) {
+        records[existingIndex] = {
+          ...current,
+          description: def.description,
+          supervision: def.supervision,
+          unit: def.unit
+        };
+        try {
+          await updateAssetRebuildableRecordInDB(records[existingIndex]);
+        } catch (e) {}
+        updated = true;
+      }
+    }
+  }
+
+  if (updated) {
+    try {
+      localStorage.setItem('automation_asset_rebuildables', JSON.stringify(records));
+    } catch (e) {}
+  }
+
+  return records;
+}
+
+async function getOrFetchAllAssetRebuildables(forceRefresh = false) {
+  if (!forceRefresh && window.AppState.assetRecords && window.AppState.assetRecords.length > 0) {
     return window.AppState.assetRecords;
   }
   try {
@@ -1768,11 +1873,12 @@ async function getOrFetchAllAssetRebuildables() {
         localStorage.setItem('automation_asset_rebuildables', JSON.stringify(records));
       }
     }
+    records = await ensureDefaultAssetRebuildables(records);
     window.AppState.assetRecords = records || [];
     return window.AppState.assetRecords;
   } catch (err) {
     console.warn('getOrFetchAllAssetRebuildables fallback:', err);
-    return [];
+    return window.AppState.assetRecords || [];
   }
 }
 
@@ -1785,7 +1891,7 @@ async function populateAsettDatalist() {
     const opSupervision = (op?.supervision || '').trim();
     const opUnit = (op?.unit || '').trim();
 
-    let filteredRecords = records;
+    let prioritizedAssets = [];
     if (opSupervision || opUnit) {
       const unitScoped = records.filter(r => {
         let match = true;
@@ -1797,12 +1903,10 @@ async function populateAsettDatalist() {
         }
         return match;
       });
-      if (unitScoped.length > 0) {
-        filteredRecords = unitScoped;
-      }
+      prioritizedAssets = Array.from(new Set(unitScoped.map(r => (r.asset || '').trim()).filter(Boolean)));
     }
-
-    const uniqueAssets = Array.from(new Set(filteredRecords.map(r => (r.asset || '').trim()).filter(Boolean)));
+    const allAssets = Array.from(new Set(records.map(r => (r.asset || '').trim()).filter(Boolean)));
+    const uniqueAssets = Array.from(new Set([...prioritizedAssets, ...allAssets]));
     datalist.innerHTML = uniqueAssets.map(a => `<option value="${escapeHtml(a)}"></option>`).join('');
   } catch (err) {
     console.warn('populateAsettDatalist error:', err);
@@ -1819,164 +1923,124 @@ async function syncRebuildablesForAsett(asettVal) {
     const badge = document.getElementById('rebuildableStatusBadge');
     const feedback = document.getElementById('asettFeedback');
     const detailBox = document.getElementById('rebuildableDetailBox');
-    const customBox = document.getElementById('customRebuildableBox');
     const clearBtn = document.getElementById('clearRebuildableSelectBtn');
 
     if (detailBox) detailBox.classList.add('hidden');
-    if (customBox) customBox.classList.add('hidden');
     if (clearBtn) clearBtn.classList.add('hidden');
 
     if (!select) return;
 
     if (!asett) {
-      select.innerHTML = '<option value=""></option>';
+      select.innerHTML = '<option value="">-- لطفاً ابتدا ASETT ID را وارد یا اسکن فرمایید --</option>';
       select.disabled = true;
       if (badge) {
         badge.className = 'text-[10px] text-slate-400 font-bold bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700';
         badge.textContent = 'منتظر ورود ASETT ID';
       }
       if (feedback) {
-        feedback.innerHTML = `
-          <svg class="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span>با ثبت یا اسکن ASETT ID، فقط قطعات قابل بازسازی (Rebuildable) مربوط به همان سرپرستی و واحد از دیتابیس بارگذاری و انتخاب می‌شوند.</span>
-        `;
+        feedback.innerHTML = '';
+        feedback.classList.add('hidden');
       }
       return;
     }
 
-    const records = await getOrFetchAllAssetRebuildables();
+    // خواندن رکوردهای معتبر از دیتابیس
+    const records = await getOrFetchAllAssetRebuildables(true);
     const cleanQuery = normalizeSearchText(asett);
-    const queryTokens = cleanQuery.split(' ').filter(t => t.length >= 2);
 
-    // ۱. بررسی مشخصات سرپرستی و واحد مجری عملیات (در صورت ثبت مشخصات)
-    const op = window.AppState.operator;
-    const opSupervision = (op?.supervision || '').trim();
-    const opUnit = (op?.unit || '').trim();
+    // ۱. تطبیق دقیق عنوان یا کد تجهیز با دیتابیس
+    let matchedRecords = records.filter(r => r.asset && normalizeSearchText(r.asset) === cleanQuery);
 
-    // ۲. تطبیق رکورد تجهیز (ASETT) از دیتابیس
-    let assetMatches = records.filter(r => normalizeSearchText(r.asset) === cleanQuery);
-
-    if (assetMatches.length === 0) {
-      assetMatches = records.filter(r => {
+    // ۲. در صورت عدم تطبیق دقیق (مانند اسکن بارکد با پیشوند/پسوند یا بخشی از نام تجهیز)، یافتن نزدیک‌ترین تجهیز منطبق
+    if (matchedRecords.length === 0) {
+      const candidates = records.filter(r => {
+        if (!r.asset) return false;
         const norm = normalizeSearchText(r.asset);
         return norm.includes(cleanQuery) || cleanQuery.includes(norm);
       });
+      if (candidates.length > 0) {
+        candidates.sort((a, b) => Math.abs(normalizeSearchText(a.asset).length - cleanQuery.length) - Math.abs(normalizeSearchText(b.asset).length - cleanQuery.length));
+        const bestAssetNorm = normalizeSearchText(candidates[0].asset);
+        // منحصراً رکوردهای همان تجهیز انتخاب می‌شوند
+        matchedRecords = records.filter(r => r.asset && normalizeSearchText(r.asset) === bestAssetNorm);
+      }
     }
 
-    if (assetMatches.length === 0 && queryTokens.length > 0) {
-      assetMatches = records.filter(r => {
-        const norm = normalizeSearchText(r.asset);
-        return queryTokens.some(tok => norm.includes(tok));
-      });
+    // ۳. تطبیق بر اساس توکن‌های کلمات تجهیز
+    if (matchedRecords.length === 0) {
+      const queryTokens = cleanQuery.split(' ').filter(t => t.length >= 2);
+      if (queryTokens.length > 0) {
+        const tokenCandidates = records.filter(r => {
+          if (!r.asset) return false;
+          const norm = normalizeSearchText(r.asset);
+          return queryTokens.every(tok => norm.includes(tok));
+        });
+        if (tokenCandidates.length > 0) {
+          const bestAssetNorm = normalizeSearchText(tokenCandidates[0].asset);
+          matchedRecords = records.filter(r => r.asset && normalizeSearchText(r.asset) === bestAssetNorm);
+        }
+      }
     }
 
-    if (assetMatches.length === 0) {
-      assetMatches = records.filter(r => {
-        const normRebuild = normalizeSearchText(r.rebuildable);
-        return normRebuild.includes(cleanQuery) || String(r.id) === cleanQuery;
-      });
-    }
-
-    // ۳. تعیین دقیق سرپرستی و واحد مرجع:
-    // اولویت با سرپرستی و واحد اپراتور جاری است؛ در غیر اینصورت از سرپرستی و واحد تجهیز تطبیق داده شده استفاده می‌شود
-    const targetSupervision = opSupervision || (assetMatches.length > 0 ? (assetMatches[0].supervision || '').trim() : '');
-    const targetUnit = opUnit || (assetMatches.length > 0 ? (assetMatches[0].unit || '').trim() : '');
-
-    // ۴. اعمال فیلتر قطعی بر روی قطعات قابل بازسازی: فقط رکوردهای متعلق به همان سرپرستی و واحد
-    let scopedMatches = assetMatches;
-    if (targetSupervision) {
-      const normTargetSup = normalizeSearchText(targetSupervision);
-      scopedMatches = scopedMatches.filter(r => !r.supervision || normalizeSearchText(r.supervision) === normTargetSup);
-    }
-    if (targetUnit) {
-      const normTargetUnit = normalizeSearchText(targetUnit);
-      scopedMatches = scopedMatches.filter(r => !r.unit || normalizeSearchText(r.unit) === normTargetUnit);
+    // ۴. تطبیق بر اساس شناسه عددی بارکد رکورد
+    if (matchedRecords.length === 0) {
+      const idMatch = records.filter(r => String(r.id) === asett);
+      if (idMatch.length > 0) {
+        const bestAssetNorm = normalizeSearchText(idMatch[0].asset);
+        matchedRecords = records.filter(r => r.asset && normalizeSearchText(r.asset) === bestAssetNorm);
+      }
     }
 
     select.disabled = false;
 
-    if (scopedMatches.length > 0) {
-      let optionsHtml = '';
-      scopedMatches.forEach((m, idx) => {
-        const desc = m.description || '';
-        const unitLabel = [m.supervision, m.unit].filter(Boolean).join(' - ');
-        const label = m.rebuildable;
-        optionsHtml += `<option value="${escapeHtml(m.rebuildable)}" data-desc="${escapeHtml(desc)}" data-unit="${escapeHtml(unitLabel)}" data-idx="${idx}">${escapeHtml(label)}</option>`;
+    // فقط قطعات منحصربه‌فرد متعلق به همین ASETT از دیتابیس خوانده و نمایش داده می‌شوند (حالت دستی طبق درخواست حذف گردید)
+    if (matchedRecords.length > 0) {
+      const uniqueRebuildables = [];
+      const seenNames = new Set();
+      matchedRecords.forEach(m => {
+        const name = (m.rebuildable || '').trim();
+        if (name && !seenNames.has(name)) {
+          seenNames.add(name);
+          uniqueRebuildables.push(m);
+        }
       });
-      optionsHtml += '<option value="__custom__">➕ ثبت قطعه بازسازی دیگر برای این واحد (دستی)...</option>';
+
+      let optionsHtml = '';
+      uniqueRebuildables.forEach((m, idx) => {
+        const desc = (m.description || '').trim();
+        const unitLabel = [m.supervision, m.unit].filter(Boolean).join(' - ');
+        const idVal = (m.rebuildable || '').trim();
+        const label = desc ? `${idVal} - ${desc}` : idVal;
+        optionsHtml += `<option value="${escapeHtml(idVal)}" data-desc="${escapeHtml(desc)}" data-unit="${escapeHtml(unitLabel)}" data-idx="${idx}">${escapeHtml(label)}</option>`;
+      });
       select.innerHTML = optionsHtml;
 
-      // انتخاب و نمایش آنی اولین قطعه بازسازی منطبق در فیلد کشویی و نمایش اطلاعات فنی
       select.selectedIndex = 0;
       handleRebuildableSelectChange(select);
 
-      const scopeInfoText = [targetSupervision, targetUnit].filter(Boolean).join(' / ');
+      const matchedAssetName = matchedRecords[0].asset || asett;
       if (badge) {
         badge.className = 'text-[10px] text-emerald-300 font-bold bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30';
-        badge.textContent = `✓ ${scopedMatches.length} قطعه بازسازی [${scopeInfoText || 'اختصاصی'}] انتخاب گردید`;
+        badge.textContent = `✓ ${uniqueRebuildables.length} قطعه اختصاصی (${matchedAssetName})`;
       }
       if (feedback) {
-        feedback.innerHTML = `
-          <svg class="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          <span class="text-emerald-400 font-bold">برای تجهیز «${escapeHtml(asett)}»، فقط قطعات مربوط به سرپرستی و واحد «${escapeHtml(scopeInfoText)}» بارگذاری شدند (${scopedMatches.length} قطعه مجاز).</span>
-        `;
-      }
-    } else if (assetMatches.length > 0) {
-      // تجهیز در دیتابیس وجود دارد اما قطعات آن مربوط به سرپرستی یا واحد دیگری است
-      const assetSup = assetMatches[0].supervision || 'نامشخص';
-      const assetUnit = assetMatches[0].unit || 'نامشخص';
-      const desiredScope = [targetSupervision, targetUnit].filter(Boolean).join(' - ');
-
-      let optionsHtml = `<option value="">-- برای واحد «${escapeHtml(desiredScope)}» قطعه‌ای در این تجهیز تعریف نشده است --</option>`;
-      optionsHtml += '<option value="__custom__">➕ ثبت قطعه بازسازی جدید برای واحد شما (دستی)...</option>';
-      select.innerHTML = optionsHtml;
-
-      if (badge) {
-        badge.className = 'text-[10px] text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30';
-        badge.textContent = 'عدم تطابق واحد با تجهیز';
-      }
-      if (feedback) {
-        feedback.innerHTML = `
-          <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-          <span class="text-amber-300">تجهیز «${escapeHtml(asett)}» در دیتابیس متعلق به «${escapeHtml(assetSup)} - ${escapeHtml(assetUnit)}» است. برای واحد «${escapeHtml(desiredScope)}» قطعه‌ای ثبت نشده است؛ می‌توانید قطعه جدید ثبت فرمایید.</span>
-        `;
+        feedback.innerHTML = '';
+        feedback.classList.add('hidden');
       }
     } else {
-      // تجهیز جدید است: فقط قطعات همان سرپرستی و واحد از سایر تجهیزات پیشنهاد داده شوند
-      let sameScopeRecords = records;
-      if (targetSupervision) {
-        const normTargetSup = normalizeSearchText(targetSupervision);
-        sameScopeRecords = sameScopeRecords.filter(r => !r.supervision || normalizeSearchText(r.supervision) === normTargetSup);
-      }
-      if (targetUnit) {
-        const normTargetUnit = normalizeSearchText(targetUnit);
-        sameScopeRecords = sameScopeRecords.filter(r => !r.unit || normalizeSearchText(r.unit) === normTargetUnit);
-      }
-
-      const uniqueScopeRebuildables = Array.from(new Set(sameScopeRecords.map(r => (r.rebuildable || '').trim()).filter(Boolean)));
-
-      let optionsHtml = '<option value="">-- لطفاً قطعه بازسازی را انتخاب یا دستی وارد نمایید --</option>';
-      if (uniqueScopeRebuildables.length > 0) {
-        const scopeTitle = [targetSupervision, targetUnit].filter(Boolean).join(' - ') || 'سامانه';
-        optionsHtml += `<optgroup label="قطعات بازسازی مربوط به ${escapeHtml(scopeTitle)}">`;
-        uniqueScopeRebuildables.forEach(r => {
-          optionsHtml += `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`;
-        });
-        optionsHtml += '</optgroup>';
-      }
-      optionsHtml += '<option value="__custom__">➕ ثبت دستی عنوان قطعه جدید...</option>';
+      // در صورتی که برای این ASETT قطعه‌ای در دیتابیس ثبت نشده باشد (حالت دستی حذف شده است)
+      let optionsHtml = '<option value="">-- هیچ قطعه‌ای در دیتابیس برای این تجهیز یافت نشد (ثبت دستی غیرفعال است) --</option>';
       select.innerHTML = optionsHtml;
+      select.selectedIndex = 0;
+      handleRebuildableSelectChange(select);
 
-      const scopeInfoText = [targetSupervision, targetUnit].filter(Boolean).join(' / ');
       if (badge) {
         badge.className = 'text-[10px] text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30';
-        badge.textContent = `فیلتر سرپرستی و واحد [${scopeInfoText || 'کلی'}]`;
+        badge.textContent = 'عدم وجود قطعه برای این ASETT';
       }
       if (feedback) {
-        feedback.innerHTML = `
-          <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-          <span class="text-amber-300">برای تجهیز «${escapeHtml(asett)}» قطعه ثبت‌شده‌ای یافت نشد؛ منوی کشویی به قطعات واحد «${escapeHtml(scopeInfoText || 'مجاز')}» محدود گردید.</span>
-        `;
+        feedback.innerHTML = '';
+        feedback.classList.add('hidden');
       }
     }
   } catch (err) {
@@ -1987,27 +2051,12 @@ async function syncRebuildablesForAsett(asettVal) {
 function handleRebuildableSelectChange(selectEl) {
   const val = selectEl ? selectEl.value : '';
   const detailBox = document.getElementById('rebuildableDetailBox');
-  const customBox = document.getElementById('customRebuildableBox');
   const clearBtn = document.getElementById('clearRebuildableSelectBtn');
 
   if (clearBtn) {
     if (val) clearBtn.classList.remove('hidden');
     else clearBtn.classList.add('hidden');
   }
-
-  if (val === '__custom__') {
-    if (detailBox) detailBox.classList.add('hidden');
-    if (customBox) {
-      customBox.classList.remove('hidden');
-      const inp = document.getElementById('customRebuildableInput');
-      if (inp) {
-        inp.focus();
-      }
-    }
-    return;
-  }
-
-  if (customBox) customBox.classList.add('hidden');
 
   if (!val) {
     if (detailBox) detailBox.classList.add('hidden');
@@ -2023,7 +2072,7 @@ function handleRebuildableSelectChange(selectEl) {
     const unitEl = document.getElementById('rebuildableDetailUnit');
     const descEl = document.getElementById('rebuildableDetailDesc');
 
-    if (titleEl) titleEl.textContent = `قطعه انتخابی: ${val}`;
+    if (titleEl) titleEl.textContent = (desc && desc.trim()) ? `قطعه انتخابی: ${val} (${desc})` : `قطعه انتخابی: ${val}`;
     if (unitEl) unitEl.textContent = unit ? `سازمان: ${unit}` : '';
     if (descEl) {
       if (desc && desc.trim()) {
@@ -2044,25 +2093,18 @@ function clearRebuildableSelection() {
     select.value = '';
     handleRebuildableSelectChange(select);
   }
-  const customInput = document.getElementById('customRebuildableInput');
-  if (customInput) customInput.value = '';
 }
 
 function getSelectedRebuildableValue() {
   const select = document.getElementById('rebuildableSelect');
-  if (!select) return '';
-  const val = select.value.trim();
-  if (val === '__custom__') {
-    return document.getElementById('customRebuildableInput')?.value.trim() || '';
-  }
-  return val;
+  return select ? select.value.trim() : '';
 }
 
 function resetRebuildableSelect() {
   const select = document.getElementById('rebuildableSelect');
   if (select) {
     select.value = '';
-    select.innerHTML = '<option value=""></option>';
+    select.innerHTML = '<option value="">-- فقط انتخاب از لیست قطعات دیتابیس (ثبت دستی حذف گردید) --</option>';
     select.disabled = true;
   }
   const badge = document.getElementById('rebuildableStatusBadge');
@@ -2072,17 +2114,11 @@ function resetRebuildableSelect() {
   }
   const feedback = document.getElementById('asettFeedback');
   if (feedback) {
-    feedback.innerHTML = `
-      <svg class="w-3.5 h-3.5 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-      <span>با ثبت یا اسکن ASETT ID، قطعات قابل بازسازی (Rebuildable) به صورت خودکار از دیتابیس در بخش فعالیت‌ها بارگذاری می‌شوند.</span>
-    `;
+    feedback.innerHTML = '';
+    feedback.classList.add('hidden');
   }
   const detailBox = document.getElementById('rebuildableDetailBox');
   if (detailBox) detailBox.classList.add('hidden');
-  const customBox = document.getElementById('customRebuildableBox');
-  if (customBox) customBox.classList.add('hidden');
-  const customInput = document.getElementById('customRebuildableInput');
-  if (customInput) customInput.value = '';
   const clearBtn = document.getElementById('clearRebuildableSelectBtn');
   if (clearBtn) clearBtn.classList.add('hidden');
 }
@@ -2104,7 +2140,7 @@ async function handleGraphFormSubmit(e) {
   const reportNotes = document.getElementById('reportNotesInput').value.trim();
 
   if (!rebuildable) {
-    showToast('⚠️ ثبت گزارش بدون قطعه قابل بازسازی (Rebuildable ID) امکان‌پذیر نیست. لطفاً قطعه را انتخاب یا وارد فرمایید.', 'error');
+    showToast('⚠️ ثبت گزارش بدون قطعه قابل بازسازی (Rebuildable ID) امکان‌پذیر نیست. لطفاً قطعه را از لیست کشویی انتخاب فرمایید.', 'error');
     const select = document.getElementById('rebuildableSelect');
     if (select && !select.disabled) {
       select.focus();
@@ -2150,6 +2186,56 @@ async function handleGraphFormSubmit(e) {
   const now = new Date();
   const jalali = getFormattedJalali(now);
 
+  // دریافت و محاسبه مدت زمان فعالیت (دستی یا ثبت‌شده از طریق کرنومتر)
+  let durationHours = parseInt(toEnglishDigits(document.getElementById('durationHoursInput')?.value || ''), 10) || 0;
+  let durationMinutes = parseInt(toEnglishDigits(document.getElementById('durationMinutesInput')?.value || ''), 10) || 0;
+  let durationSeconds = parseInt(toEnglishDigits(document.getElementById('durationSecondsInput')?.value || ''), 10) || 0;
+
+  // اگر ورودی‌های دستی خالی بودند اما کرنومتر دارای زمان اندازه‌گیری شده بود، خودکار خوانده شود
+  if (durationHours === 0 && durationMinutes === 0 && durationSeconds === 0 && window.StopwatchState && window.StopwatchState.elapsedTime > 0) {
+    const totalSec = Math.round(window.StopwatchState.elapsedTime / 1000);
+    durationHours = Math.floor(totalSec / 3600);
+    durationMinutes = Math.floor((totalSec % 3600) / 60);
+    durationSeconds = totalSec % 60;
+    const hrEl = document.getElementById('durationHoursInput');
+    const minEl = document.getElementById('durationMinutesInput');
+    const secEl = document.getElementById('durationSecondsInput');
+    if (hrEl) hrEl.value = durationHours > 0 ? durationHours : '';
+    if (minEl) minEl.value = durationMinutes;
+    if (secEl) secEl.value = durationSeconds;
+    updateDurationFormattedDisplay();
+  }
+
+  // در صورت روشن بودن کرنومتر، متوقف گردد
+  if (window.StopwatchState && window.StopwatchState.isRunning) {
+    pauseStopwatch();
+  }
+
+  const durationTotalSeconds = (durationHours * 3600) + (durationMinutes * 60) + durationSeconds;
+  let durationFormatted = '';
+  let durationDigital = '';
+  if (durationTotalSeconds > 0) {
+    const parts = [];
+    if (durationHours > 0) parts.push(`${durationHours} ساعت`);
+    if (durationMinutes > 0) parts.push(`${durationMinutes} دقیقه`);
+    if (durationSeconds > 0) parts.push(`${durationSeconds} ثانیه`);
+    durationFormatted = parts.join(' و ') || (durationSeconds > 0 ? `${durationSeconds} ثانیه` : `${durationMinutes} دقیقه`);
+
+    if (durationSeconds > 0) {
+      if (durationHours > 0) {
+        durationDigital = `${String(durationHours).padStart(2, '0')}:${String(durationMinutes).padStart(2, '0')}:${String(durationSeconds).padStart(2, '0')}`;
+      } else {
+        durationDigital = `${String(durationMinutes).padStart(2, '0')}:${String(durationSeconds).padStart(2, '0')}`;
+      }
+    } else {
+      if (durationHours > 0) {
+        durationDigital = `${String(durationHours).padStart(2, '0')}:${String(durationMinutes).padStart(2, '0')}`;
+      } else {
+        durationDigital = `00:${String(durationMinutes).padStart(2, '0')}`;
+      }
+    }
+  }
+
   const graphRecord = {
     timestamp: now.getTime(),
     jalaliDate: jalali.dateNumStr,
@@ -2166,6 +2252,13 @@ async function handleGraphFormSubmit(e) {
     conditionalFields: primaryActivity.conditionalFields || {},
     colleagues: [...window.AppState.colleagues],
     location: { ...window.AppState.currentLocation },
+    durationHours: durationHours,
+    durationMinutes: durationMinutes,
+    durationSeconds: durationSeconds,
+    durationTotalSeconds: durationTotalSeconds,
+    durationFormatted: durationFormatted,
+    durationDigital: durationDigital,
+    durationMethod: (window.StopwatchState && window.StopwatchState.elapsedTime > 0) ? 'اتوماتیک (کرنومتر)' : (durationTotalSeconds > 0 ? 'دستی' : 'نامشخص'),
     syncStatus: isOnline ? 'synced' : 'pending',
     syncedAt: isOnline ? now.toISOString() : null
   };
@@ -2214,6 +2307,9 @@ function resetGraphForm() {
   window.AppState.colleagues = [];
   renderColleaguesList();
 
+  clearDurationInputs(true);
+  resetStopwatch(true);
+
   updateLiveClock();
 }
 
@@ -2227,9 +2323,10 @@ function updateNetworkStatusIndicator() {
   const text = document.getElementById('networkStatusText');
 
   if (isOnline) {
-    if (badge) badge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-emerald-950/70 border border-emerald-500/50 text-emerald-300';
+    // طبق درخواست کاربر عبارت «آنلاین» از سربرگ حذف گردید و در حالت آنلاین نشانگر مخفی است
+    if (badge) badge.className = 'hidden';
     if (dot) dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
-    if (text) text.textContent = 'آنلاین';
+    if (text) text.textContent = '';
   } else {
     if (badge) badge.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-amber-950/70 border border-amber-500/50 text-amber-300';
     if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-ping';
@@ -2316,15 +2413,535 @@ function updateLiveClock() {
 }
 
 // ==========================================
+// ۱۱.۱. ماژول زمان فعالیت و کرنومتر صنعتی (Stopwatch)
+// ==========================================
+window.StopwatchState = {
+  isRunning: false,
+  startTime: 0,
+  elapsedTime: 0, // بر حسب میلی‌ثانیه
+  timerInterval: null
+};
+
+function formatTwoDigits(n) {
+  const num = Math.floor(Math.max(0, Number(n) || 0));
+  return String(num).padStart(2, '0');
+}
+
+function updateStopwatchDisplay() {
+  const totalMs = Math.max(0, window.StopwatchState.elapsedTime || 0);
+  const totalSeconds = Math.floor(totalMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const millis = Math.floor((totalMs % 1000) / 10);
+
+  const hrStr = formatTwoDigits(hours);
+  const minStr = formatTwoDigits(minutes);
+  const secStr = formatTwoDigits(seconds);
+  const msStr = formatTwoDigits(millis);
+
+  // نمایش در مودال پاپ‌آپ
+  const hrEl = document.getElementById('swHours');
+  const minEl = document.getElementById('swMinutes');
+  const secEl = document.getElementById('swSeconds');
+  const msEl = document.getElementById('swMillis');
+  if (hrEl) hrEl.textContent = hrStr;
+  if (minEl) minEl.textContent = minStr;
+  if (secEl) secEl.textContent = secStr;
+  if (msEl) msEl.textContent = msStr;
+
+  // نمایش در پنل بازشونده درون کارت
+  const cardHrEl = document.getElementById('cardSwHours');
+  const cardMinEl = document.getElementById('cardSwMinutes');
+  const cardSecEl = document.getElementById('cardSwSeconds');
+  const cardMsEl = document.getElementById('cardSwMillis');
+  if (cardHrEl) cardHrEl.textContent = hrStr;
+  if (cardMinEl) cardMinEl.textContent = minStr;
+  if (cardSecEl) cardSecEl.textContent = secStr;
+  if (cardMsEl) cardMsEl.textContent = msStr;
+
+  // نمایش در نوار کوچک وضعیت
+  const miniDisp = document.getElementById('stopwatchMiniDisplay');
+  if (miniDisp) {
+    miniDisp.textContent = hours > 0 ? `${hrStr}:${minStr}:${secStr}` : `${minStr}:${secStr}`;
+  }
+}
+
+function toggleStopwatchStartPause() {
+  if (window.StopwatchState.isRunning) {
+    pauseStopwatch();
+  } else {
+    startStopwatch();
+  }
+}
+
+/**
+ * همگام‌سازی و ثبت کاملاً خودکار زمان اندازه‌گیری شده کرنومتر در فیلدهای فرم فعالیت
+ */
+function syncStopwatchTimeToFormInputs(showToastNotification = false) {
+  const totalMs = Math.max(0, window.StopwatchState.elapsedTime || 0);
+  const totalSeconds = Math.round(totalMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const hrInput = document.getElementById('durationHoursInput');
+  const minInput = document.getElementById('durationMinutesInput');
+  const secInput = document.getElementById('durationSecondsInput');
+
+  if (hrInput) hrInput.value = hours > 0 ? hours : '';
+  if (minInput) minInput.value = minutes;
+  if (secInput) secInput.value = seconds;
+
+  updateDurationFormattedDisplay();
+
+  if (showToastNotification && totalSeconds > 0) {
+    const parts = [];
+    if (hours > 0) parts.push(`${hours} ساعت`);
+    if (minutes > 0) parts.push(`${minutes} دقیقه`);
+    if (seconds > 0 && hours === 0) parts.push(`${seconds} ثانیه`);
+    const formatted = parts.join(' و ') || `${seconds} ثانیه`;
+    showToast(`✓ مدت زمان (${formatted}) به‌صورت خودکار در فرم ثبت گردید.`, 'success');
+  }
+}
+
+function startStopwatch() {
+  if (window.StopwatchState.isRunning) return;
+  window.StopwatchState.isRunning = true;
+  window.StopwatchState.startTime = Date.now() - (window.StopwatchState.elapsedTime || 0);
+
+  if (window.StopwatchState.timerInterval) {
+    clearInterval(window.StopwatchState.timerInterval);
+  }
+
+  let lastSyncSec = -1;
+  window.StopwatchState.timerInterval = setInterval(() => {
+    window.StopwatchState.elapsedTime = Math.max(0, Date.now() - window.StopwatchState.startTime);
+    updateStopwatchDisplay();
+
+    // همگام‌سازی و ثبت خودکار لحظه‌ای در فرم با هر ثانیه پیشروی کرنومتر
+    const currentSec = Math.floor(window.StopwatchState.elapsedTime / 1000);
+    if (currentSec !== lastSyncSec) {
+      lastSyncSec = currentSec;
+      syncStopwatchTimeToFormInputs(false);
+    }
+  }, 40);
+
+  updateStopwatchUIState(true);
+}
+
+function pauseStopwatch() {
+  if (!window.StopwatchState.isRunning) return;
+  window.StopwatchState.isRunning = false;
+  if (window.StopwatchState.timerInterval) {
+    clearInterval(window.StopwatchState.timerInterval);
+    window.StopwatchState.timerInterval = null;
+  }
+  if (window.StopwatchState.startTime > 0) {
+    window.StopwatchState.elapsedTime = Math.max(0, Date.now() - window.StopwatchState.startTime);
+  }
+  updateStopwatchDisplay();
+  updateStopwatchUIState(false);
+
+  // ثبت خودکار و قطعی زمان به محض توقف
+  syncStopwatchTimeToFormInputs(true);
+}
+
+function resetStopwatch(silent = false) {
+  pauseStopwatch();
+  window.StopwatchState.elapsedTime = 0;
+  window.StopwatchState.startTime = 0;
+  updateStopwatchDisplay();
+  const setHour = document.getElementById('swSetHoursInput');
+  const setMin = document.getElementById('swSetMinutesInput');
+  const setSec = document.getElementById('swSetSecondsInput');
+  if (setHour) setHour.value = '';
+  if (setMin) setMin.value = '';
+  if (setSec) setSec.value = '';
+  updateStopwatchUIState(false);
+  clearDurationInputs();
+  if (!silent) {
+    showToast('زمان کرنومتر صفر شد (RESET).', 'info');
+  }
+}
+
+/**
+ * کلید هوشمند SET:
+ * ۱. اگر کاربر در فیلدهای تنظیم دستی مودال مقداری وارد کرده باشد -> کرنومتر بر اساس آن تنظیم می‌شود.
+ * ۲. اگر کرنومتر در حال کار بوده یا زمانی اندازه‌گیری کرده باشد -> زمان فعلی روی فیلدهای ساعت، دقیقه و ثانیه فرم ثبت می‌شود.
+ * ۳. اگر کرنومتر صفر باشد و فیلدهای فرم مقداری داشته باشند -> کرنومتر بر اساس مقادیر فرم تنظیم می‌شود.
+ */
+function handleStopwatchSet(customHour, customMin, customSec) {
+  let hourVal = (customHour !== undefined && customHour !== null) ? parseInt(toEnglishDigits(String(customHour)), 10) : null;
+  let minVal = (customMin !== undefined && customMin !== null) ? parseInt(toEnglishDigits(String(customMin)), 10) : null;
+  let secVal = (customSec !== undefined && customSec !== null) ? parseInt(toEnglishDigits(String(customSec)), 10) : null;
+
+  // ۱. بررسی ورودی‌های تنظیم در مودال (swSetHoursInput, swSetMinutesInput, swSetSecondsInput)
+  if (hourVal === null || isNaN(hourVal)) {
+    const swHrEl = document.getElementById('swSetHoursInput');
+    if (swHrEl && swHrEl.value.trim() !== '') {
+      hourVal = parseInt(toEnglishDigits(swHrEl.value.trim()), 10);
+    }
+  }
+  if (minVal === null || isNaN(minVal)) {
+    const swMinEl = document.getElementById('swSetMinutesInput');
+    if (swMinEl && swMinEl.value.trim() !== '') {
+      minVal = parseInt(toEnglishDigits(swMinEl.value.trim()), 10);
+    }
+  }
+  if (secVal === null || isNaN(secVal)) {
+    const swSecEl = document.getElementById('swSetSecondsInput');
+    if (swSecEl && swSecEl.value.trim() !== '') {
+      secVal = parseInt(toEnglishDigits(swSecEl.value.trim()), 10);
+    }
+  }
+
+  // ۲. اگر مقادیر دلخواه دستی وارد شده باشد -> کرنومتر بر اساس آن مقداردهی اولیه می‌شود
+  const totalInputSec = ((hourVal || 0) * 3600) + ((minVal || 0) * 60) + (secVal || 0);
+  if (totalInputSec > 0) {
+    pauseStopwatch();
+    const h = Math.max(0, hourVal || 0);
+    const m = Math.max(0, minVal || 0);
+    const s = Math.max(0, Math.min(59, secVal || 0));
+    window.StopwatchState.elapsedTime = ((h * 3600) + (m * 60) + s) * 1000;
+    window.StopwatchState.startTime = Date.now() - window.StopwatchState.elapsedTime;
+    updateStopwatchDisplay();
+
+    // همزمان ورودی‌های فرم اصلی را هم تنظیم می‌کنیم
+    const formHr = document.getElementById('durationHoursInput');
+    const formMin = document.getElementById('durationMinutesInput');
+    const formSec = document.getElementById('durationSecondsInput');
+    if (formHr) formHr.value = h > 0 ? h : '';
+    if (formMin) formMin.value = m;
+    if (formSec) formSec.value = s;
+    updateDurationFormattedDisplay();
+
+    const parts = [];
+    if (h > 0) parts.push(`${h} ساعت`);
+    if (m > 0) parts.push(`${m} دقیقه`);
+    if (s > 0 && h === 0) parts.push(`${s} ثانیه`);
+    const formatted = parts.join(' و ') || `${s} ثانیه`;
+
+    showToast(`زمان کرنومتر روی ${formatted} تنظیم (SET) شد.`, 'info');
+    return;
+  }
+
+  // ۳. اگر کرنومتر زمانی اندازه‌گیری کرده باشد (یا در حال کار باشد)
+  if (window.StopwatchState.elapsedTime > 0) {
+    applyStopwatchTimeToForm();
+    return;
+  }
+
+  showToast('لطفاً دکمه شروع کرنومتر را بزنید یا ساعت و دقیقه مورد نظر را وارد نمایید.', 'info');
+}
+
+function syncStopwatchFromFormInputs() {
+  // بر اساس درخواست: مقادیر وارد شده به صورت دستی در ماژول زمان به زمان شروع کرنومتر اضافه نمی‌شوند و کرنومتر همواره از صفر آغاز می‌گردد
+}
+
+function applyStopwatchTimeToForm() {
+  if (window.StopwatchState.isRunning) {
+    pauseStopwatch();
+  } else {
+    syncStopwatchTimeToFormInputs(true);
+  }
+
+  closeStopwatchModal();
+
+  const panel = document.getElementById('stopwatchEmbeddedPanel');
+  const btnText = document.getElementById('openStopwatchBtnText');
+  if (panel && !panel.classList.contains('hidden')) {
+    panel.classList.add('hidden');
+    panel.classList.remove('stopwatch-3d-rotate');
+    if (btnText) btnText.textContent = 'کرنومتر دیجیتال (ثبت خودکار)';
+  }
+}
+
+/**
+ * ذخیره مدت زمان فعالیت (دکمه اختصاصی ذخیره در ماژول مدت زمان فعالیت)
+ */
+function saveDurationTime() {
+  let durationHours = parseInt(toEnglishDigits(document.getElementById('durationHoursInput')?.value || ''), 10) || 0;
+  let durationMinutes = parseInt(toEnglishDigits(document.getElementById('durationMinutesInput')?.value || ''), 10) || 0;
+  let durationSeconds = parseInt(toEnglishDigits(document.getElementById('durationSecondsInput')?.value || ''), 10) || 0;
+
+  let totalSec = (durationHours * 3600) + (durationMinutes * 60) + durationSeconds;
+
+  // اگر ورودی‌های دستی خالی بودند اما کرنومتر دارای زمان اندازه‌گیری شده بود، از کرنومتر استخراج گردد
+  if (totalSec === 0 && window.StopwatchState && window.StopwatchState.elapsedTime > 0) {
+    if (window.StopwatchState.isRunning) {
+      pauseStopwatch();
+    }
+    const elapsedSec = Math.round(window.StopwatchState.elapsedTime / 1000);
+    durationHours = Math.floor(elapsedSec / 3600);
+    durationMinutes = Math.floor((elapsedSec % 3600) / 60);
+    durationSeconds = elapsedSec % 60;
+
+    const hrEl = document.getElementById('durationHoursInput');
+    const minEl = document.getElementById('durationMinutesInput');
+    const secEl = document.getElementById('durationSecondsInput');
+    if (hrEl) hrEl.value = durationHours > 0 ? durationHours : '';
+    if (minEl) minEl.value = durationMinutes;
+    if (secEl) secEl.value = durationSeconds;
+
+    totalSec = elapsedSec;
+  }
+
+  if (totalSec === 0) {
+    showToast('لطفاً ساعت و دقیقه را به صورت دستی وارد نمایید یا با دکمه کرنومتر زمان را ثبت فرمایید.', 'warning');
+    return;
+  }
+
+  updateDurationFormattedDisplay();
+
+  const parts = [];
+  if (durationHours > 0) parts.push(`${durationHours} ساعت`);
+  if (durationMinutes > 0) parts.push(`${durationMinutes} دقیقه`);
+  if (durationSeconds > 0) parts.push(`${durationSeconds} ثانیه`);
+  const formatted = parts.join(' و ') || (durationSeconds > 0 ? `${durationSeconds} ثانیه` : `${durationMinutes} دقیقه`);
+
+  showToast(`مدت زمان فعالیت با موفقیت ذخیره شد: ${formatted}`, 'success');
+}
+
+/**
+ * باز یا بسته کردن پنل بازشونده مستقیم کرنومتر درون کارت با جلوه سه‌بعدی چرخشی
+ */
+function toggleStopwatchPanel() {
+  const panel = document.getElementById('stopwatchEmbeddedPanel');
+  const btn = document.getElementById('openStopwatchBtn');
+  const btnText = document.getElementById('openStopwatchBtnText');
+  if (!panel) {
+    openStopwatchModal();
+    return;
+  }
+
+  const isHidden = panel.classList.contains('hidden');
+  if (isHidden) {
+    panel.classList.remove('hidden');
+    // اعمال انیمیشن سه‌بعدی چرخشی جذاب با هر بار باز شدن
+    panel.classList.remove('stopwatch-3d-rotate');
+    void panel.offsetWidth;
+    panel.classList.add('stopwatch-3d-rotate');
+
+    // چرخش سه‌بعدی آیکون دکمه
+    const btnIcon = btn ? btn.querySelector('svg') : null;
+    if (btnIcon) {
+      btnIcon.classList.remove('spin-3d-btn');
+      void btnIcon.offsetWidth;
+      btnIcon.classList.add('spin-3d-btn');
+    }
+
+    if (btnText) btnText.textContent = 'بستن کرنومتر ✕';
+
+    // مقدار دستی وارد شده به هیچ عنوان به کرنومتر اضافه نمی‌شود و کرنومتر از صفر (یا زمان قبلی خودش) شروع می‌شود
+    updateStopwatchDisplay();
+    updateStopwatchUIState(window.StopwatchState.isRunning);
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } else {
+    panel.classList.add('hidden');
+    panel.classList.remove('stopwatch-3d-rotate');
+    if (btnText) btnText.textContent = 'کرنومتر دیجیتال (ثبت خودکار)';
+    if (window.StopwatchState && window.StopwatchState.elapsedTime > 0) {
+      syncStopwatchTimeToFormInputs(false);
+    }
+  }
+}
+window.toggleStopwatchPanel = toggleStopwatchPanel;
+
+function openStopwatchModal() {
+  const modal = document.getElementById('stopwatchModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const modalBox = modal.querySelector('.bg-slate-900') || modal.firstElementChild;
+    if (modalBox) {
+      modalBox.classList.remove('stopwatch-3d-rotate');
+      void modalBox.offsetWidth;
+      modalBox.classList.add('stopwatch-3d-rotate');
+    }
+    // زمان دستی به کرنومتر اضافه نمی‌شود و کرنومتر از صفر آغاز می‌گردد
+    updateStopwatchDisplay();
+    updateStopwatchUIState(window.StopwatchState.isRunning);
+  }
+}
+window.openStopwatchModal = openStopwatchModal;
+
+function closeStopwatchModal() {
+  const modal = document.getElementById('stopwatchModal');
+  if (modal) modal.classList.add('hidden');
+  // ثبت خودکار زمان اندازه‌گیری شده به محض بستن مودال
+  if (window.StopwatchState && window.StopwatchState.elapsedTime > 0) {
+    syncStopwatchTimeToFormInputs(false);
+  }
+}
+window.closeStopwatchModal = closeStopwatchModal;
+
+function updateStopwatchUIState(isRunning) {
+  // بروزرسانی همزمان دکمه‌ها در پنل کارت و در مودال
+  ['sw', 'cardSw'].forEach(prefix => {
+    const btn = document.getElementById(`${prefix}StartPauseBtn`);
+    const text = document.getElementById(`${prefix}StartPauseText`);
+    const iconStart = document.getElementById(`${prefix}StartIcon`);
+    const iconPause = document.getElementById(`${prefix}PauseIcon`);
+    const statusDot = document.getElementById(`${prefix}StatusDot`);
+    const statusText = document.getElementById(`${prefix}StatusText`);
+
+    if (isRunning) {
+      if (text) text.textContent = 'توقف و ثبت خودکار زمان ⏸';
+      if (iconStart) iconStart.classList.add('hidden');
+      if (iconPause) iconPause.classList.remove('hidden');
+      if (btn) {
+        btn.classList.remove('from-emerald-500', 'to-teal-600', 'hover:from-emerald-400');
+        btn.classList.add('from-amber-500', 'to-amber-600', 'hover:from-amber-400');
+      }
+      if (statusDot) {
+        statusDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+      }
+      if (statusText) {
+        statusText.textContent = 'در حال زمان‌سنجی... (ثبت خودکار لحظه‌ای)';
+        statusText.className = 'text-emerald-400 font-bold';
+      }
+    } else {
+      const hasTime = window.StopwatchState && window.StopwatchState.elapsedTime > 0;
+      if (text) text.textContent = hasTime ? 'ادامه زمان‌سنجی (ثبت خودکار)' : 'شروع اندازه‌گیری زمان (ثبت خودکار)';
+      if (iconStart) iconStart.classList.remove('hidden');
+      if (iconPause) iconPause.classList.add('hidden');
+      if (btn) {
+        btn.classList.remove('from-amber-500', 'to-amber-600', 'hover:from-amber-400');
+        btn.classList.add('from-emerald-500', 'to-teal-600', 'hover:from-emerald-400');
+      }
+      if (statusDot) {
+        statusDot.className = hasTime ? 'w-2.5 h-2.5 rounded-full bg-emerald-400' : 'w-2.5 h-2.5 rounded-full bg-slate-500';
+      }
+      if (statusText) {
+        statusText.textContent = hasTime ? 'زمان متوقف و در فرم ثبت شد ✓' : 'آماده زمان‌سنجی (ثبت خودکار)';
+        statusText.className = hasTime ? 'text-emerald-300 font-bold' : 'text-slate-400 font-medium';
+      }
+    }
+  });
+
+  const indicator = document.getElementById('stopwatchRunningIndicator');
+  if (indicator) {
+    if (isRunning) {
+      indicator.classList.remove('hidden');
+      indicator.classList.add('inline-flex');
+    } else {
+      const hasTime = window.StopwatchState && window.StopwatchState.elapsedTime > 0;
+      if (hasTime) {
+        indicator.classList.remove('hidden');
+        indicator.classList.add('inline-flex');
+      } else {
+        indicator.classList.add('hidden');
+        indicator.classList.remove('inline-flex');
+      }
+    }
+  }
+}
+
+// گوش دادن به تغییر دید تب برای همگام‌سازی فوری زمان پس از قفل گوشی یا بازگشت به تب
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && window.StopwatchState && window.StopwatchState.isRunning) {
+    window.StopwatchState.elapsedTime = Math.max(0, Date.now() - window.StopwatchState.startTime);
+    updateStopwatchDisplay();
+  }
+});
+
+function updateDurationFormattedDisplay() {
+  const hrInput = document.getElementById('durationHoursInput');
+  const minInput = document.getElementById('durationMinutesInput');
+  const secInput = document.getElementById('durationSecondsInput');
+
+  const hrVal = parseInt(toEnglishDigits(hrInput?.value || ''), 10) || 0;
+  const minVal = parseInt(toEnglishDigits(minInput?.value || ''), 10) || 0;
+  const secVal = parseInt(toEnglishDigits(secInput?.value || ''), 10) || 0;
+  const badge = document.getElementById('durationSummaryBadge');
+  const text = document.getElementById('durationFormattedText');
+  const digital = document.getElementById('durationDigitalText');
+
+  const totalSeconds = (hrVal * 3600) + (minVal * 60) + secVal;
+
+  if (totalSeconds > 0) {
+    if (badge) {
+      badge.classList.remove('hidden');
+      badge.classList.add('flex');
+    }
+    const parts = [];
+    if (hrVal > 0) parts.push(`${hrVal} ساعت`);
+    if (minVal > 0) parts.push(`${minVal} دقیقه`);
+    if (secVal > 0) parts.push(`${secVal} ثانیه`);
+    const formatted = parts.join(' و ') || (secVal > 0 ? `${secVal} ثانیه` : `${minVal} دقیقه`);
+
+    if (text) text.textContent = formatted;
+    if (digital) {
+      if (secVal > 0) {
+        // برای کرنومتر (شامل ثانیه)
+        if (hrVal > 0) {
+          digital.textContent = `${formatTwoDigits(hrVal)}:${formatTwoDigits(minVal)}:${formatTwoDigits(secVal)}`;
+        } else {
+          digital.textContent = `${formatTwoDigits(minVal)}:${formatTwoDigits(secVal)}`;
+        }
+      } else {
+        // برای ثبت دستی زمان (فقط ساعت و دقیقه)
+        if (hrVal > 0) {
+          digital.textContent = `${formatTwoDigits(hrVal)}:${formatTwoDigits(minVal)}`;
+        } else {
+          digital.textContent = `00:${formatTwoDigits(minVal)}`;
+        }
+      }
+    }
+  } else {
+    if (badge) {
+      badge.classList.add('hidden');
+      badge.classList.remove('flex');
+    }
+  }
+}
+
+function clearDurationInputs(silent = false) {
+  const hrInput = document.getElementById('durationHoursInput');
+  const minInput = document.getElementById('durationMinutesInput');
+  const secInput = document.getElementById('durationSecondsInput');
+  if (hrInput) hrInput.value = '';
+  if (minInput) minInput.value = '';
+  if (secInput) secInput.value = '';
+  updateDurationFormattedDisplay();
+  if (!silent) {
+    showToast('مقادیر زمان فعالیت پاکسازی شد.', 'info');
+  }
+}
+
+// ==========================================
 // ۱۲. احراز هویت و ورود به پنل ادمین
 // ==========================================
-const SUPER_ADMIN = {
+var SUPER_ADMIN = {
   username: 'admin',
   password: 'Ehsan2559',
   fullName: 'احسان ابوالقاسمی (مدیر نرم افزار )',
   isSuperAdmin: true,
   unit: 'کل واحدها',
-  supervision: 'کل سرپرستی‌ها'
+  supervision: 'کل سرپرستی‌ها',
+  permissions: {
+    orgManage: true,
+    adminManage: true,
+    backup: true,
+    personnelManage: true,
+    assetRebuildable: true
+  }
+};
+
+var MANAGER_ADMIN = {
+  username: '417734',
+  password: '3344',
+  fullName: 'مهندس محسن جعفری (مدیراتوماسیون و ارتباطات )',
+  isSuperAdmin: true,
+  unit: 'کل واحدها',
+  supervision: 'کل سرپرستی‌ها',
+  permissions: {
+    orgManage: true,
+    adminManage: true,
+    backup: true,
+    personnelManage: true,
+    assetRebuildable: true
+  }
 };
 
 function isMasterAdmin(user) {
@@ -2336,7 +2953,7 @@ function isMasterAdmin(user) {
     } catch (e) {}
   }
   if (!user) return true; // دسترسی پیش‌فرض در صورت عدم تعیین کاربر
-  return user.username === 'admin' || user.isSuperAdmin === true;
+  return user.username === 'admin' || user.username === '417734' || user.username === '417737' || user.isSuperAdmin === true;
 }
 
 function canAccessOrgManage(user) {
@@ -2381,12 +2998,18 @@ function checkAdminAuthSession() {
   if (stored) {
     try {
       const parsed = JSON.parse(stored);
-      if (parsed && (parsed.username === 'admin' || parsed.isSuperAdmin)) {
-        window.AppState.currentUser = SUPER_ADMIN;
-      } else {
-        window.AppState.currentUser = parsed;
+      if (parsed) {
+        if (parsed.username === '417734' || parsed.username === '417737') {
+          window.AppState.currentUser = MANAGER_ADMIN;
+        } else if (parsed.username === 'admin') {
+          window.AppState.currentUser = SUPER_ADMIN;
+        } else if (parsed.isSuperAdmin) {
+          window.AppState.currentUser = parsed;
+        } else {
+          window.AppState.currentUser = parsed;
+        }
+        return true;
       }
-      return true;
     } catch (e) {
       sessionStorage.removeItem('automation_admin_session');
     }
@@ -2397,8 +3020,8 @@ function checkAdminAuthSession() {
 // ==========================================
 // بنر ۳ ثانیه‌ای ورود به صفحه مدیران با تیتر اختصاصی
 // ==========================================
-let adminWelcomeBannerTimer = null;
-let adminWelcomeBannerInterval = null;
+var adminWelcomeBannerTimer = null;
+var adminWelcomeBannerInterval = null;
 
 function showAdminWelcomeBanner(displayName) {
   const banner = document.getElementById('adminWelcomeBanner');
@@ -2541,6 +3164,7 @@ async function handleAdminLogin(e) {
   const user = document.getElementById('loginUsername').value.trim();
   const pass = document.getElementById('loginPassword').value.trim();
 
+  // ۱. بررسی ورود مدیر نرم‌افزار (admin)
   if (user.toLowerCase() === 'admin' && (pass === 'Ehsan2559' || pass.toLowerCase() === 'ehsan2559')) {
     window.AppState.currentUser = SUPER_ADMIN;
     sessionStorage.setItem('automation_admin_session', JSON.stringify(SUPER_ADMIN));
@@ -2548,8 +3172,21 @@ async function handleAdminLogin(e) {
     const form = document.getElementById('adminLoginForm');
     if (form) form.reset();
 
-    const displayName = 'احسان ابوالقاسمی (مدیر نرم افزار )';
-    // انتقال به صفحه مدیر و نمایش بنر ۳ ثانیه‌ای با تیتر اختصاصی
+    const displayName = SUPER_ADMIN.fullName;
+    switchToAdminView();
+    showAdminWelcomeBanner(displayName);
+    return;
+  }
+
+  // ۲. بررسی ورود مهندس محسن جعفری (مدیراتوماسیون و ارتباطات) - نام کاربری: 417734 و رمز: 3344
+  if ((user === '417734' || user === '417737') && pass === '3344') {
+    window.AppState.currentUser = MANAGER_ADMIN;
+    sessionStorage.setItem('automation_admin_session', JSON.stringify(MANAGER_ADMIN));
+    closeModal('loginModal');
+    const form = document.getElementById('adminLoginForm');
+    if (form) form.reset();
+
+    const displayName = MANAGER_ADMIN.fullName;
     switchToAdminView();
     showAdminWelcomeBanner(displayName);
     return;
@@ -2566,7 +3203,6 @@ async function handleAdminLogin(e) {
       if (form) form.reset();
 
       const displayName = match.fullName || match.username;
-      // انتقال به صفحه مدیر و نمایش بنر ۳ ثانیه‌ای با تیتر اختصاصی
       switchToAdminView();
       showAdminWelcomeBanner(displayName);
       return;
@@ -2671,7 +3307,13 @@ function renderAdminUserHeaderInfo(user) {
 
   const isSuperAdmin = isMasterAdmin(user);
   if (titleEl) {
-    titleEl.textContent = isSuperAdmin ? 'احسان ابوالقاسمی (مدیر نرم افزار )' : (user.fullName || user.username);
+    if (user.username === '417734' || user.username === '417737') {
+      titleEl.textContent = MANAGER_ADMIN.fullName;
+    } else if (user.username === 'admin') {
+      titleEl.textContent = SUPER_ADMIN.fullName;
+    } else {
+      titleEl.textContent = user.fullName || user.username;
+    }
   }
 
   const userSup = (user.supervision || '').trim();
@@ -2910,6 +3552,761 @@ function onAdminFilterSupervisionChange() {
   applyAdminFilters();
 }
 
+function normalizeTimeToMinutes(tStr) {
+  if (!tStr) return null;
+  const english = toEnglishDigits(String(tStr).trim());
+  const match = english.match(/(\d{1,2})[:_.](\d{1,2})/);
+  if (!match) return null;
+  const h = parseInt(match[1], 10);
+  const m = parseInt(match[2], 10);
+  if (isNaN(h) || isNaN(m)) return null;
+  return (h * 60) + m;
+}
+
+function clearTimeFilters() {
+  if (document.getElementById('filterTimeFrom')) document.getElementById('filterTimeFrom').value = '';
+  if (document.getElementById('filterTimeTo')) document.getElementById('filterTimeTo').value = '';
+  applyAdminFilters();
+}
+window.clearTimeFilters = clearTimeFilters;
+
+function clearDateFilters() {
+  if (document.getElementById('filterDateFrom')) document.getElementById('filterDateFrom').value = '';
+  if (document.getElementById('filterDateTo')) document.getElementById('filterDateTo').value = '';
+  applyAdminFilters();
+}
+window.clearDateFilters = clearDateFilters;
+
+// ==========================================
+// توابع تقویم هجری شمسی تعاملی و ساعت آنالوگ ماژول گزارش‌ها
+// ==========================================
+
+function isJalaliLeapYear(jy) {
+  return (((((jy - ((jy > 0) ? 474 : 473)) % 2820) + 474) + 38) * 682) % 2816 < 682;
+}
+
+function getJalaliMonthDays(jy, jm) {
+  if (jm >= 1 && jm <= 6) return 31;
+  if (jm >= 7 && jm <= 11) return 30;
+  return isJalaliLeapYear(jy) ? 30 : 29;
+}
+
+function jalaliToGregorian(jy, jm, jd) {
+  let gy = (jy <= 979) ? 621 : 1600;
+  jy -= (jy <= 979) ? 0 : 979;
+  let days = (365 * jy) + (Math.floor(jy / 33) * 8) + Math.floor(((jy % 33) + 3) / 4) +
+    78 + jd + ((jm < 7) ? ((jm - 1) * 31) : (((jm - 7) * 30) + 186));
+  gy += 400 * Math.floor(days / 146097);
+  days %= 146097;
+  if (days > 36524) {
+    gy += 100 * Math.floor(--days / 36524);
+    days %= 36524;
+    if (days >= 365) days++;
+  }
+  gy += 4 * Math.floor(days / 1461);
+  days %= 1461;
+  if (days > 365) {
+    gy += Math.floor((days - 1) / 365);
+    days = (days - 1) % 365;
+  }
+  let gd = days + 1;
+  const sal_a = [0, 31, ((gy % 4 === 0 && gy % 100 !== 0) || (gy % 400 === 0)) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  let gm = 0;
+  for (gm = 0; gm < 13; gm++) {
+    const v = sal_a[gm];
+    if (gd <= v) break;
+    gd -= v;
+  }
+  return { gy, gm, gd };
+}
+
+function getFirstDayOfWeekInJalaliMonth(jy, jm) {
+  const g = jalaliToGregorian(jy, jm, 1);
+  const gDate = new Date(g.gy, g.gm - 1, g.gd);
+  return (gDate.getDay() + 1) % 7; // 0=شنبه، ..., 6=جمعه
+}
+
+// وضعیت تقویم شمسی
+var CalendarState = {
+  currentTarget: 'from',
+  selectedFrom: '',
+  selectedTo: '',
+  viewYear: 1405,
+  viewMonth: 1
+};
+
+function openPersianCalendarModal(target = 'from') {
+  const modal = document.getElementById('persianCalendarModal');
+  if (!modal) return;
+
+  const currentFrom = (document.getElementById('filterDateFrom')?.value || '').trim();
+  const currentTo = (document.getElementById('filterDateTo')?.value || '').trim();
+
+  CalendarState.selectedFrom = currentFrom;
+  CalendarState.selectedTo = currentTo;
+
+  if (target === 'to') {
+    CalendarState.currentTarget = 'to';
+  } else {
+    CalendarState.currentTarget = 'from';
+  }
+
+  const baseDateStr = CalendarState.currentTarget === 'to' && CalendarState.selectedTo
+    ? CalendarState.selectedTo
+    : (CalendarState.selectedFrom || getFormattedJalali().dateNumStr);
+
+  const parts = toEnglishDigits(baseDateStr).split(/[\/.-]/);
+  const y = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+
+  CalendarState.viewYear = (!isNaN(y) && y >= 1350 && y <= 1450) ? y : getFormattedJalali().jy;
+  CalendarState.viewMonth = (!isNaN(m) && m >= 1 && m <= 12) ? m : getFormattedJalali().jm;
+
+  initCalendarYearDropdown();
+  updateCalendarTabHeaders();
+  renderCalendarDaysGrid();
+
+  modal.classList.remove('hidden');
+}
+
+function closePersianCalendarModal() {
+  const modal = document.getElementById('persianCalendarModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function switchCalendarTarget(target) {
+  CalendarState.currentTarget = target === 'to' ? 'to' : 'from';
+  updateCalendarTabHeaders();
+  renderCalendarDaysGrid();
+}
+
+function updateCalendarTabHeaders() {
+  const tabFromBtn = document.getElementById('calTabFromBtn');
+  const tabToBtn = document.getElementById('calTabToBtn');
+  const prevFrom = document.getElementById('calPreviewFrom');
+  const prevTo = document.getElementById('calPreviewTo');
+
+  if (prevFrom) prevFrom.textContent = CalendarState.selectedFrom || '---';
+  if (prevTo) prevTo.textContent = CalendarState.selectedTo || '---';
+
+  const activeClass = 'py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 bg-amber-500 text-slate-950 shadow';
+  const inactiveClass = 'py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800';
+
+  if (tabFromBtn) tabFromBtn.className = CalendarState.currentTarget === 'from' ? activeClass : inactiveClass;
+  if (tabToBtn) tabToBtn.className = CalendarState.currentTarget === 'to' ? activeClass : inactiveClass;
+}
+
+function initCalendarYearDropdown() {
+  const ySel = document.getElementById('calYearSelect');
+  const mSel = document.getElementById('calMonthSelect');
+  if (ySel) {
+    ySel.innerHTML = '';
+    const currentY = getFormattedJalali().jy;
+    for (let y = currentY - 5; y <= currentY + 5; y++) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      if (y === CalendarState.viewYear) opt.selected = true;
+      ySel.appendChild(opt);
+    }
+  }
+  if (mSel) {
+    mSel.value = CalendarState.viewMonth;
+  }
+}
+
+function onCalendarSelectChange() {
+  const ySel = document.getElementById('calYearSelect');
+  const mSel = document.getElementById('calMonthSelect');
+  if (ySel) CalendarState.viewYear = parseInt(ySel.value, 10);
+  if (mSel) CalendarState.viewMonth = parseInt(mSel.value, 10);
+  renderCalendarDaysGrid();
+}
+
+function navigateCalendarMonth(delta) {
+  let m = CalendarState.viewMonth + delta;
+  let y = CalendarState.viewYear;
+  if (m > 12) {
+    m = 1;
+    y++;
+  } else if (m < 1) {
+    m = 12;
+    y--;
+  }
+  CalendarState.viewYear = y;
+  CalendarState.viewMonth = m;
+
+  const ySel = document.getElementById('calYearSelect');
+  const mSel = document.getElementById('calMonthSelect');
+  if (ySel) {
+    if (![...ySel.options].some(o => parseInt(o.value, 10) === y)) {
+      const opt = document.createElement('option');
+      opt.value = y;
+      opt.textContent = y;
+      ySel.appendChild(opt);
+    }
+    ySel.value = y;
+  }
+  if (mSel) mSel.value = m;
+
+  renderCalendarDaysGrid();
+}
+
+function renderCalendarDaysGrid() {
+  const grid = document.getElementById('calDaysGrid');
+  if (!grid) return;
+
+  grid.innerHTML = '';
+  const jy = CalendarState.viewYear;
+  const jm = CalendarState.viewMonth;
+  const daysInMonth = getJalaliMonthDays(jy, jm);
+  const firstDayOffset = getFirstDayOfWeekInJalaliMonth(jy, jm); // 0=Sat..6=Fri
+
+  const todayStr = getFormattedJalali().dateNumStr;
+
+  for (let i = 0; i < firstDayOffset; i++) {
+    const emptyCell = document.createElement('div');
+    emptyCell.className = 'p-1.5 opacity-0 pointer-events-none';
+    grid.appendChild(emptyCell);
+  }
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const pad = (n) => String(n).padStart(2, '0');
+    const dateStr = `${jy}/${pad(jm)}/${pad(d)}`;
+    const dayOfWeekIndex = (firstDayOffset + d - 1) % 7;
+    const isFriday = dayOfWeekIndex === 6;
+
+    const isFrom = CalendarState.selectedFrom === dateStr;
+    const isTo = CalendarState.selectedTo === dateStr;
+    const isBetween = CalendarState.selectedFrom && CalendarState.selectedTo &&
+      dateStr > CalendarState.selectedFrom && dateStr < CalendarState.selectedTo;
+    const isToday = todayStr === dateStr;
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.setAttribute('data-date', dateStr);
+    btn.onclick = () => selectCalendarDay(dateStr);
+
+    let btnClasses = 'w-full aspect-square rounded-xl text-xs font-mono font-bold flex items-center justify-center transition active:scale-95 ';
+
+    if (isFrom || isTo) {
+      btnClasses += 'bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 font-black shadow-md shadow-amber-500/30 scale-105 z-10';
+    } else if (isBetween) {
+      btnClasses += 'bg-amber-500/20 text-amber-200 border border-amber-500/30';
+    } else if (isToday) {
+      btnClasses += 'bg-slate-800 text-amber-300 ring-2 ring-amber-400/80 hover:bg-slate-700';
+    } else if (isFriday) {
+      btnClasses += 'text-rose-400 bg-slate-950/60 hover:bg-slate-800 border border-rose-950/40';
+    } else {
+      btnClasses += 'text-slate-200 bg-slate-950/60 hover:bg-slate-800 hover:text-amber-300 border border-slate-800/80';
+    }
+
+    btn.className = btnClasses;
+    btn.textContent = d;
+    btn.title = `${dateStr}${isToday ? ' (امروز)' : ''}${isFriday ? ' (جمعه)' : ''}`;
+
+    grid.appendChild(btn);
+  }
+}
+
+function selectCalendarDay(dateStr) {
+  if (CalendarState.currentTarget === 'from') {
+    CalendarState.selectedFrom = dateStr;
+    if (!CalendarState.selectedTo || CalendarState.selectedTo < dateStr) {
+      CalendarState.selectedTo = dateStr;
+    }
+    CalendarState.currentTarget = 'to';
+  } else {
+    CalendarState.selectedTo = dateStr;
+    if (CalendarState.selectedFrom && CalendarState.selectedTo < CalendarState.selectedFrom) {
+      const tmp = CalendarState.selectedFrom;
+      CalendarState.selectedFrom = CalendarState.selectedTo;
+      CalendarState.selectedTo = tmp;
+    }
+  }
+
+  updateCalendarTabHeaders();
+  renderCalendarDaysGrid();
+}
+
+function applyQuickDatePreset(preset) {
+  const pad = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+  const todayJ = getFormattedJalali(now);
+  const todayStr = todayJ.dateNumStr;
+
+  if (preset === 'today') {
+    CalendarState.selectedFrom = todayStr;
+    CalendarState.selectedTo = todayStr;
+  } else if (preset === 'yesterday') {
+    const yDate = new Date(now.getTime() - 86400000);
+    const yJ = getFormattedJalali(yDate).dateNumStr;
+    CalendarState.selectedFrom = yJ;
+    CalendarState.selectedTo = yJ;
+  } else if (preset === 'thisWeek') {
+    const dayOfWeek = (now.getDay() + 1) % 7;
+    const startSat = new Date(now.getTime() - (dayOfWeek * 86400000));
+    const endFri = new Date(startSat.getTime() + (6 * 86400000));
+    CalendarState.selectedFrom = getFormattedJalali(startSat).dateNumStr;
+    CalendarState.selectedTo = getFormattedJalali(endFri).dateNumStr;
+  } else if (preset === 'thisMonth') {
+    const daysInM = getJalaliMonthDays(todayJ.jy, todayJ.jm);
+    CalendarState.selectedFrom = `${todayJ.jy}/${pad(todayJ.jm)}/01`;
+    CalendarState.selectedTo = `${todayJ.jy}/${pad(todayJ.jm)}/${pad(daysInM)}`;
+  } else if (preset === 'last30Days') {
+    const past30 = new Date(now.getTime() - (30 * 86400000));
+    CalendarState.selectedFrom = getFormattedJalali(past30).dateNumStr;
+    CalendarState.selectedTo = todayStr;
+  } else if (preset === 'clear') {
+    CalendarState.selectedFrom = '';
+    CalendarState.selectedTo = '';
+  }
+
+  updateCalendarTabHeaders();
+  renderCalendarDaysGrid();
+}
+
+function confirmPersianCalendarSelection() {
+  const fromEl = document.getElementById('filterDateFrom');
+  const toEl = document.getElementById('filterDateTo');
+
+  if (fromEl) fromEl.value = CalendarState.selectedFrom;
+  if (toEl) toEl.value = CalendarState.selectedTo;
+
+  closePersianCalendarModal();
+  applyAdminFilters();
+  showToast('بازه تاریخی با موفقیت در جدول اعمال شد', 'info');
+}
+
+// ==========================================
+// وضعیت و منطق ساعت آنالوگ تعاملی
+// ==========================================
+var ClockState = {
+  currentTarget: 'from',
+  mode: 'hour',
+  fromHour: 0,
+  fromMinute: 0,
+  toHour: 23,
+  toMinute: 59,
+  isDragging: false
+};
+
+function parseTimeString(str, defaultH, defaultM) {
+  if (!str) return { h: defaultH, m: defaultM };
+  const eng = toEnglishDigits(String(str).trim());
+  const match = eng.match(/(\d{1,2})[:_.](\d{1,2})/);
+  if (!match) return { h: defaultH, m: defaultM };
+  let h = parseInt(match[1], 10);
+  let m = parseInt(match[2], 10);
+  if (isNaN(h) || h < 0 || h > 23) h = defaultH;
+  if (isNaN(m) || m < 0 || m > 59) m = defaultM;
+  return { h, m };
+}
+
+function formatClockTime(h, m) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(h)}:${pad(m)}`;
+}
+
+function openAnalogClockModal(target = 'from') {
+  const modal = document.getElementById('analogClockModal');
+  if (!modal) return;
+
+  const curFrom = document.getElementById('filterTimeFrom')?.value || '';
+  const curTo = document.getElementById('filterTimeTo')?.value || '';
+
+  const parsedFrom = parseTimeString(curFrom, 0, 0);
+  const parsedTo = parseTimeString(curTo, 23, 59);
+
+  ClockState.fromHour = parsedFrom.h;
+  ClockState.fromMinute = parsedFrom.m;
+  ClockState.toHour = parsedTo.h;
+  ClockState.toMinute = parsedTo.m;
+
+  ClockState.currentTarget = target === 'to' ? 'to' : 'from';
+  ClockState.mode = 'hour';
+
+  updateClockModalUI();
+  initAnalogClockEvents();
+
+  modal.classList.remove('hidden');
+}
+
+function closeAnalogClockModal() {
+  const modal = document.getElementById('analogClockModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function switchClockTarget(target) {
+  ClockState.currentTarget = target === 'to' ? 'to' : 'from';
+  updateClockModalUI();
+}
+
+function setClockSelectionMode(mode) {
+  ClockState.mode = mode === 'minute' ? 'minute' : 'hour';
+  updateClockModalUI();
+}
+
+function adjustClockValue(amount, unit) {
+  const isFrom = ClockState.currentTarget === 'from';
+  let h = isFrom ? ClockState.fromHour : ClockState.toHour;
+  let m = isFrom ? ClockState.fromMinute : ClockState.toMinute;
+
+  if (unit === 'hour') {
+    h = (h + amount + 24) % 24;
+  } else if (unit === 'minute') {
+    m = (m + amount + 60) % 60;
+  }
+
+  if (isFrom) {
+    ClockState.fromHour = h;
+    ClockState.fromMinute = m;
+  } else {
+    ClockState.toHour = h;
+    ClockState.toMinute = m;
+  }
+
+  updateClockModalUI();
+}
+
+function applyClockShiftPreset(fromStr, toStr) {
+  const f = parseTimeString(fromStr, 7, 0);
+  const t = parseTimeString(toStr, 15, 0);
+
+  ClockState.fromHour = f.h;
+  ClockState.fromMinute = f.m;
+  ClockState.toHour = t.h;
+  ClockState.toMinute = t.m;
+
+  updateClockModalUI();
+  showToast(`شیفت کاری ${fromStr} تا ${toStr} تنظیم شد`, 'info');
+}
+
+function clearClockFilter() {
+  ClockState.fromHour = 0;
+  ClockState.fromMinute = 0;
+  ClockState.toHour = 23;
+  ClockState.toMinute = 59;
+
+  const fInput = document.getElementById('filterTimeFrom');
+  const tInput = document.getElementById('filterTimeTo');
+  if (fInput) fInput.value = '';
+  if (tInput) tInput.value = '';
+
+  closeAnalogClockModal();
+  applyAdminFilters();
+  showToast('فیلتر ساعت پاکسازی شد', 'info');
+}
+
+function confirmAnalogClockSelection() {
+  const fInput = document.getElementById('filterTimeFrom');
+  const tInput = document.getElementById('filterTimeTo');
+
+  const fTime = formatClockTime(ClockState.fromHour, ClockState.fromMinute);
+  const tTime = formatClockTime(ClockState.toHour, ClockState.toMinute);
+
+  if (fInput) fInput.value = fTime;
+  if (tInput) tInput.value = tTime;
+
+  closeAnalogClockModal();
+  applyAdminFilters();
+  showToast(`فیلتر زمانی از ${fTime} تا ${tTime} اعمال شد`, 'success');
+}
+
+function updateClockModalUI() {
+  const isFrom = ClockState.currentTarget === 'from';
+  const h = isFrom ? ClockState.fromHour : ClockState.toHour;
+  const m = isFrom ? ClockState.fromMinute : ClockState.toMinute;
+
+  const prevFrom = document.getElementById('clockPreviewFrom');
+  const prevTo = document.getElementById('clockPreviewTo');
+  if (prevFrom) prevFrom.textContent = formatClockTime(ClockState.fromHour, ClockState.fromMinute);
+  if (prevTo) prevTo.textContent = formatClockTime(ClockState.toHour, ClockState.toMinute);
+
+  const tabFromBtn = document.getElementById('clockTabFromBtn');
+  const tabToBtn = document.getElementById('clockTabToBtn');
+  const activeTabClass = 'py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 bg-cyan-500 text-slate-950 shadow';
+  const inactiveTabClass = 'py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800';
+
+  if (tabFromBtn) tabFromBtn.className = isFrom ? activeTabClass : inactiveTabClass;
+  if (tabToBtn) tabToBtn.className = !isFrom ? activeTabClass : inactiveTabClass;
+
+  const modeHourBtn = document.getElementById('clockModeHourBtn');
+  const modeMinuteBtn = document.getElementById('clockModeMinuteBtn');
+  if (modeHourBtn) {
+    modeHourBtn.className = ClockState.mode === 'hour'
+      ? 'px-3.5 py-1.5 rounded-lg font-bold transition bg-cyan-500 text-slate-950 shadow'
+      : 'px-3.5 py-1.5 rounded-lg font-bold transition text-slate-400 hover:text-slate-200';
+  }
+  if (modeMinuteBtn) {
+    modeMinuteBtn.className = ClockState.mode === 'minute'
+      ? 'px-3.5 py-1.5 rounded-lg font-bold transition bg-cyan-500 text-slate-950 shadow'
+      : 'px-3.5 py-1.5 rounded-lg font-bold transition text-slate-400 hover:text-slate-200';
+  }
+
+  const activeDisp = document.getElementById('clockActiveDisplay');
+  if (activeDisp) {
+    activeDisp.textContent = formatClockTime(h, m);
+  }
+
+  renderAnalogClockDial(h, m);
+}
+
+function renderAnalogClockDial(h, m) {
+  const svg = document.getElementById('analogClockSvg');
+  const numGroup = document.getElementById('clockNumbersGroup');
+  const hourHand = document.getElementById('clockHourHand');
+  const minuteHand = document.getElementById('clockMinuteHand');
+
+  if (!svg || !numGroup || !hourHand || !minuteHand) return;
+
+  numGroup.innerHTML = '';
+  const cx = 120;
+  const cy = 120;
+
+  const hourAngle = ((h % 12) * 30) + (m * 0.5);
+  const hourRad = (hourAngle - 90) * Math.PI / 180;
+  const hourLen = (h >= 13 || h === 0) ? 46 : 64;
+  hourHand.setAttribute('x1', cx);
+  hourHand.setAttribute('y1', cy);
+  hourHand.setAttribute('x2', (cx + hourLen * Math.cos(hourRad)).toFixed(1));
+  hourHand.setAttribute('y2', (cy + hourLen * Math.sin(hourRad)).toFixed(1));
+  hourHand.setAttribute('stroke', ClockState.mode === 'hour' ? '#38bdf8' : '#f59e0b');
+
+  const minuteAngle = m * 6;
+  const minuteRad = (minuteAngle - 90) * Math.PI / 180;
+  const minuteLen = 82;
+  minuteHand.setAttribute('x1', cx);
+  minuteHand.setAttribute('y1', cy);
+  minuteHand.setAttribute('x2', (cx + minuteLen * Math.cos(minuteRad)).toFixed(1));
+  minuteHand.setAttribute('y2', (cy + minuteLen * Math.sin(minuteRad)).toFixed(1));
+  minuteHand.setAttribute('stroke', ClockState.mode === 'minute' ? '#38bdf8' : '#06b6d4');
+
+  if (ClockState.mode === 'hour') {
+    for (let i = 1; i <= 12; i++) {
+      const angle = (i * 30 - 90) * Math.PI / 180;
+      const r = 84;
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+
+      const isCurrentH = (h === i || (h === 0 && i === 12 && false));
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', x.toFixed(1));
+      text.setAttribute('y', (y + 4.5).toFixed(1));
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('font-size', '12');
+      text.setAttribute('font-family', 'monospace');
+      text.setAttribute('font-weight', isCurrentH ? '900' : 'bold');
+      text.setAttribute('fill', isCurrentH ? '#38bdf8' : '#cbd5e1');
+      text.textContent = i;
+      numGroup.appendChild(text);
+    }
+
+    for (let i = 13; i <= 24; i++) {
+      const displayVal = i === 24 ? '00' : String(i);
+      const hourVal = i === 24 ? 0 : i;
+      const angle = ((i - 12) * 30 - 90) * Math.PI / 180;
+      const r = 54;
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+
+      const isCurrentH = h === hourVal;
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', x.toFixed(1));
+      text.setAttribute('y', (y + 3.5).toFixed(1));
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('font-size', '10');
+      text.setAttribute('font-family', 'monospace');
+      text.setAttribute('font-weight', isCurrentH ? '900' : 'normal');
+      text.setAttribute('fill', isCurrentH ? '#38bdf8' : '#94a3b8');
+      text.textContent = displayVal;
+      numGroup.appendChild(text);
+    }
+  } else {
+    for (let i = 0; i < 60; i += 5) {
+      const angle = (i * 6 - 90) * Math.PI / 180;
+      const r = 82;
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+
+      const isCurrentM = Math.abs(m - i) <= 2;
+      const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', x.toFixed(1));
+      text.setAttribute('y', (y + 4.5).toFixed(1));
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('font-size', '11');
+      text.setAttribute('font-family', 'monospace');
+      text.setAttribute('font-weight', isCurrentM ? '900' : 'bold');
+      text.setAttribute('fill', isCurrentM ? '#38bdf8' : '#94a3b8');
+      text.textContent = String(i).padStart(2, '0');
+      numGroup.appendChild(text);
+    }
+  }
+}
+
+var _clockEventsInitialized = false;
+function initAnalogClockEvents() {
+  if (_clockEventsInitialized) return;
+  const container = document.getElementById('analogClockContainer');
+  if (!container) return;
+
+  function handleInteraction(clientX, clientY) {
+    const rect = container.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    let angleDeg = (Math.atan2(dy, dx) * 180 / Math.PI) + 90;
+    if (angleDeg < 0) angleDeg += 360;
+
+    const isFrom = ClockState.currentTarget === 'from';
+
+    if (ClockState.mode === 'hour') {
+      let h = Math.round(angleDeg / 30) % 12;
+      if (h === 0) h = 12;
+
+      const isInner = dist < (rect.width / 2) * 0.62;
+      if (isInner) {
+        h = (h === 12) ? 0 : (h + 12);
+      }
+
+      if (isFrom) {
+        ClockState.fromHour = h;
+      } else {
+        ClockState.toHour = h;
+      }
+    } else {
+      let m = Math.round(angleDeg / 6) % 60;
+      if (isFrom) {
+        ClockState.fromMinute = m;
+      } else {
+        ClockState.toMinute = m;
+      }
+    }
+
+    updateClockModalUI();
+  }
+
+  container.addEventListener('pointerdown', (e) => {
+    ClockState.isDragging = true;
+    handleInteraction(e.clientX, e.clientY);
+  });
+
+  window.addEventListener('pointermove', (e) => {
+    if (ClockState.isDragging) {
+      handleInteraction(e.clientX, e.clientY);
+    }
+  });
+
+  window.addEventListener('pointerup', () => {
+    if (ClockState.isDragging) {
+      ClockState.isDragging = false;
+      if (ClockState.mode === 'hour') {
+        setTimeout(() => {
+          setClockSelectionMode('minute');
+        }, 250);
+      }
+    }
+  });
+
+  _clockEventsInitialized = true;
+}
+
+// ==========================================
+// استخراج جامع داده‌های گزارش برای جدول، اکسل و PDF
+// ==========================================
+function getReportRowData(r, idx) {
+  const op = r.operator || {};
+  const cond = r.conditionalFields || {};
+  const loc = r.location || {};
+
+  const personnelId = op.personnelId || '---';
+  const fullName = `${op.firstName || ''} ${op.lastName || ''}`.trim() || '---';
+  const supervision = op.supervision || '---';
+  const unit = op.unit || '---';
+  const role = op.role || '---';
+  const asett = r.asett || cond.asett || '---';
+  const rebuildable = r.rebuildable || cond.rebuildable || '---';
+
+  let activityFull = '';
+  if (Array.isArray(r.activities) && r.activities.length > 0) {
+    activityFull = r.activities.map((act, i) => {
+      const parts = [act.type];
+      const c = act.conditionalFields || {};
+      if (c.footage) parts.push(`متراژ: ${c.footage}م`);
+      if (c.equipmentId) parts.push(`شناسه تجهیز: ${c.equipmentId}`);
+      if (c.deviceTag) parts.push(`تگ: ${c.deviceTag}`);
+      if (c.referenceTool) parts.push(`مرجع: ${c.referenceTool}`);
+      return (r.activities.length > 1 ? `(${i + 1}) ` : '') + parts.join(' - ');
+    }).join(' | ');
+  } else {
+    const parts = [r.activityType || '---'];
+    if (cond.footage) parts.push(`متراژ: ${cond.footage}م`);
+    if (cond.equipmentId) parts.push(`تجهیز: ${cond.equipmentId}`);
+    if (cond.deviceTag) parts.push(`تگ: ${cond.deviceTag}`);
+    if (cond.referenceTool) parts.push(`مرجع: ${cond.referenceTool}`);
+    activityFull = parts.join(' - ');
+  }
+
+  let durationMethod = r.durationMethod;
+  if (!durationMethod) {
+    if ((r.durationSeconds && r.durationSeconds > 0) || r.durationSource === 'stopwatch') {
+      durationMethod = 'اتوماتیک (کرنومتر)';
+    } else if (r.durationTotalSeconds > 0 || r.durationHours > 0 || r.durationMinutes > 0) {
+      durationMethod = 'دستی';
+    } else {
+      durationMethod = 'نامشخص';
+    }
+  }
+  const durationValue = r.durationFormatted || (r.durationDigital ? r.durationDigital : (r.durationTotalSeconds ? `${r.durationTotalSeconds} ثانیه` : '---'));
+  const durationWithMethod = durationValue !== '---' ? `${durationValue} (${durationMethod})` : '---';
+
+  const notes = r.reportNotes || '---';
+
+  const colleaguesList = (r.colleagues || []).map((c) => {
+    if (typeof c === 'object' && c !== null) {
+      return `${c.name || ''} (${c.code || ''})`.trim();
+    }
+    return String(c);
+  }).filter(Boolean);
+  const colleaguesStr = colleaguesList.length > 0 ? colleaguesList.join('، ') : 'بدون همکار';
+
+  const photosList = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : (r.photo ? [r.photo] : []);
+
+  const dateTimeStr = `${r.jalaliDate || '---'} ساعت ${r.jalaliTime || '---'}`;
+
+  let locationStr = '---';
+  if (loc.lat && loc.lng) {
+    locationStr = `${parseFloat(loc.lat).toFixed(5)}, ${parseFloat(loc.lng).toFixed(5)}`;
+    if (loc.accuracy) locationStr += ` (دقت: ${Math.round(loc.accuracy)}م)`;
+  }
+
+  return {
+    index: idx + 1,
+    personnelId,
+    fullName,
+    supervision,
+    unit,
+    role,
+    asett,
+    rebuildable,
+    activityFull,
+    durationWithMethod,
+    durationValue,
+    durationMethod,
+    notes,
+    colleaguesStr,
+    photosList,
+    dateTimeStr,
+    jalaliDate: r.jalaliDate || '---',
+    jalaliTime: r.jalaliTime || '---',
+    locationStr,
+    id: r.id
+  };
+}
+
 function applyAdminFilters() {
   let list = window.AppState.allReports || [];
 
@@ -2919,6 +4316,8 @@ function applyAdminFilters() {
   const unit = document.getElementById('filterUnitSelect')?.value || '';
   const dateFrom = document.getElementById('filterDateFrom')?.value.trim() || '';
   const dateTo = document.getElementById('filterDateTo')?.value.trim() || '';
+  const timeFrom = document.getElementById('filterTimeFrom')?.value.trim() || '';
+  const timeTo = document.getElementById('filterTimeTo')?.value.trim() || '';
 
   if (search) {
     list = list.filter((r) => {
@@ -2932,7 +4331,15 @@ function applyAdminFilters() {
   }
 
   if (activity) {
-    list = list.filter((r) => r.activityType === activity);
+    if (activity.includes('conf') || activity.includes('calib')) {
+      list = list.filter((r) => (r.activityType || '').includes('conf') || (r.activityType || '').includes('calib') || (r.activityType || '').includes('تنظیمات حرفه‌ای'));
+    } else if (activity.includes('مکانیکال') || activity.includes('آچارکشی اتصالات')) {
+      list = list.filter((r) => (r.activityType || '').includes('مکانیکال') || (r.activityType || '').includes('آچارکشی اتصالات'));
+    } else if (activity.includes('نظارت')) {
+      list = list.filter((r) => (r.activityType || '').includes('نظارت'));
+    } else {
+      list = list.filter((r) => r.activityType === activity);
+    }
   }
 
   if (supervision) {
@@ -2957,6 +4364,38 @@ function applyAdminFilters() {
     list = list.filter((r) => (r.jalaliDate || '') <= dateTo);
   }
 
+  // فیلتر ساعت (از ساعت مشخص تا ساعت مشخص)
+  if (timeFrom || timeTo) {
+    const fromMin = normalizeTimeToMinutes(timeFrom);
+    const toMin = normalizeTimeToMinutes(timeTo);
+
+    list = list.filter((r) => {
+      let recMin = null;
+      if (r.jalaliTime) {
+        recMin = normalizeTimeToMinutes(r.jalaliTime);
+      }
+      if (recMin === null && r.timestamp) {
+        const d = new Date(r.timestamp);
+        recMin = (d.getHours() * 60) + d.getMinutes();
+      }
+      if (recMin === null) return true;
+
+      if (fromMin !== null && toMin !== null) {
+        if (fromMin <= toMin) {
+          return recMin >= fromMin && recMin <= toMin;
+        } else {
+          // عبور از نیمه شب (مانند شیفت شب از ۲۲:۰۰ تا ۰۶:۰۰)
+          return recMin >= fromMin || recMin <= toMin;
+        }
+      } else if (fromMin !== null) {
+        return recMin >= fromMin;
+      } else if (toMin !== null) {
+        return recMin <= toMin;
+      }
+      return true;
+    });
+  }
+
   window.AppState.filteredReports = list;
   renderReportsTable(list);
 }
@@ -2966,9 +4405,11 @@ function resetAdminFilters() {
   if (document.getElementById('filterActivitySelect')) document.getElementById('filterActivitySelect').value = '';
   if (document.getElementById('filterDateFrom')) document.getElementById('filterDateFrom').value = '';
   if (document.getElementById('filterDateTo')) document.getElementById('filterDateTo').value = '';
+  if (document.getElementById('filterTimeFrom')) document.getElementById('filterTimeFrom').value = '';
+  if (document.getElementById('filterTimeTo')) document.getElementById('filterTimeTo').value = '';
 
   const user = window.AppState.currentUser;
-  const isSuperAdmin = !user || user.isSuperAdmin || user.username === 'admin';
+  const isSuperAdmin = isMasterAdmin(user);
   const userSup = user ? (user.supervision || '').trim() : '';
   const userUnit = user ? (user.unit || '').trim() : '';
   const isGlobalSup = isSuperAdmin || !userSup || userSup === 'همه سرپرستی‌ها' || userSup === 'کل سرپرستی‌ها';
@@ -3007,62 +4448,51 @@ function renderReportsTable(list) {
   if (emptyBox) emptyBox.classList.add('hidden');
 
   list.forEach((r, idx) => {
+    const d = getReportRowData(r, idx);
     const tr = document.createElement('tr');
     tr.className = 'border-b border-slate-800 hover:bg-slate-800/40 transition';
 
-    const opName = r.operator ? `${r.operator.firstName} ${r.operator.lastName}` : '---';
-    const personnel = r.operator ? r.operator.personnelId : '---';
-    const unit = r.operator ? r.operator.unit : '---';
-
-    let conditionInfo = '';
-    if (r.conditionalFields) {
-      if (r.conditionalFields.footage) conditionInfo = `متراژ: ${r.conditionalFields.footage}م`;
-      if (r.conditionalFields.equipmentId) conditionInfo = `تجهیز: ${r.conditionalFields.equipmentId}`;
-      if (r.conditionalFields.deviceTag) conditionInfo = `تگ: ${r.conditionalFields.deviceTag} (مرجع: ${r.conditionalFields.referenceTool})`;
-    }
-
-    const isSynced = r.syncStatus === 'synced';
-    const statusBadge = isSynced
-      ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-950 text-emerald-300 border border-emerald-800">همگام‌شده</span>'
-      : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-950 text-amber-300 border border-amber-800">در صف</span>';
-
-    const photosList = Array.isArray(r.photos) && r.photos.length > 0 ? r.photos : (r.photo ? [r.photo] : []);
-    let photoThumb = '<span class="text-xs text-slate-500">بدون عکس</span>';
-    if (photosList.length === 1) {
-      photoThumb = `<img src="${photosList[0]}" onclick="showDetailModal(${r.id})" class="w-10 h-10 object-cover rounded cursor-pointer border border-slate-700 hover:scale-105 transition" title="مشاهده تصویر">`;
-    } else if (photosList.length > 1) {
+    let photoThumb = '<span class="text-xs text-slate-500">بدون تصویر</span>';
+    if (d.photosList.length === 1) {
+      photoThumb = `<img src="${d.photosList[0]}" onclick="showDetailModal(${r.id})" class="w-10 h-10 object-cover rounded cursor-pointer border border-slate-700 hover:scale-105 transition" title="مشاهده تصویر">`;
+    } else if (d.photosList.length > 1) {
       photoThumb = `
-        <div class="relative inline-block cursor-pointer" onclick="showDetailModal(${r.id})" title="مشاهده ${photosList.length} تصویر">
-          <img src="${photosList[0]}" class="w-10 h-10 object-cover rounded border border-amber-500/60 shadow hover:scale-105 transition">
+        <div class="relative inline-block cursor-pointer" onclick="showDetailModal(${r.id})" title="مشاهده ${d.photosList.length} تصویر">
+          <img src="${d.photosList[0]}" class="w-10 h-10 object-cover rounded border border-amber-500/60 shadow hover:scale-105 transition">
           <span class="absolute -top-1.5 -left-1.5 bg-amber-500 text-slate-950 font-bold text-[9px] px-1 rounded-full border border-slate-900 shadow">
-            +${photosList.length}
+            +${d.photosList.length}
           </span>
         </div>
       `;
     }
 
+    const durationBadgeClass = d.durationMethod.includes('اتوماتیک')
+      ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/60'
+      : 'bg-amber-950/80 text-amber-300 border border-amber-800/60';
+
     tr.innerHTML = `
-      <td class="p-3 text-center text-slate-400 font-mono text-xs">${idx + 1}</td>
+      <td class="p-3 text-center text-slate-400 font-mono text-xs">${d.index}</td>
+      <td class="p-3 font-mono font-bold text-amber-300 text-xs whitespace-nowrap">${escapeHtml(d.personnelId)}</td>
+      <td class="p-3 whitespace-nowrap font-medium text-slate-100">${escapeHtml(d.fullName)}</td>
+      <td class="p-3 whitespace-nowrap text-slate-300 text-xs">${escapeHtml(d.supervision)}</td>
+      <td class="p-3 whitespace-nowrap text-slate-300 text-xs">${escapeHtml(d.unit)}</td>
+      <td class="p-3 whitespace-nowrap text-slate-400 text-xs">${escapeHtml(d.role)}</td>
+      <td class="p-3 font-mono text-xs text-amber-400 whitespace-nowrap font-bold">${escapeHtml(d.asett)}</td>
+      <td class="p-3 font-mono text-xs text-cyan-400 whitespace-nowrap font-bold">${escapeHtml(d.rebuildable)}</td>
+      <td class="p-3 text-xs min-w-[200px]"><div class="font-bold text-slate-200">${escapeHtml(d.activityFull)}</div></td>
+      <td class="p-3 text-xs whitespace-nowrap">
+        <span class="font-mono font-bold text-cyan-300">${escapeHtml(d.durationValue)}</span>
+        <span class="text-[10px] px-1.5 py-0.5 rounded font-bold mr-1 ${durationBadgeClass}">${escapeHtml(d.durationMethod)}</span>
+      </td>
+      <td class="p-3 text-xs text-slate-300 min-w-[180px] max-w-[260px] truncate" title="${escapeHtml(d.notes)}">${escapeHtml(d.notes)}</td>
+      <td class="p-3 text-xs text-slate-300 min-w-[140px] whitespace-normal">${escapeHtml(d.colleaguesStr)}</td>
+      <td class="p-3 text-center whitespace-nowrap">${photoThumb}</td>
       <td class="p-3 whitespace-nowrap">
-        <div class="font-medium text-slate-200 text-sm">${r.jalaliDate || '---'}</div>
-        <div class="text-xs text-slate-400 font-mono">${r.jalaliTime || ''}</div>
+        <div class="font-bold text-slate-200 text-xs">${escapeHtml(d.jalaliDate)}</div>
+        <div class="text-[11px] text-slate-400 font-mono">${escapeHtml(d.jalaliTime)}</div>
       </td>
-      <td class="p-3 whitespace-nowrap">
-        <div class="font-medium text-slate-200">${opName}</div>
-        <div class="text-xs text-slate-400 font-mono">پرسنلی: ${personnel}</div>
-      </td>
-      <td class="p-3 text-slate-300 text-xs whitespace-nowrap">${unit}</td>
-      <td class="p-3 whitespace-nowrap">
-        <div class="text-amber-400 font-medium text-xs">${r.activityType}</div>
-        ${conditionInfo ? `<div class="text-xs text-slate-400 mt-0.5">${conditionInfo}</div>` : ''}
-      </td>
-      <td class="p-3 text-xs font-mono text-slate-300 whitespace-nowrap">
-        <div>ASETT: ${r.asett || '-'}</div>
-        <div>Rebuild: ${r.rebuildable || '-'}</div>
-      </td>
-      <td class="p-3 text-center whitespace-nowrap">${statusBadge}</td>
-      <td class="p-3 text-center">${photoThumb}</td>
-      <td class="p-3 text-center whitespace-nowrap">
+      <td class="p-3 font-mono text-[11px] text-slate-400 whitespace-nowrap text-right" dir="ltr">${escapeHtml(d.locationStr)}</td>
+      <td class="p-3 text-center whitespace-nowrap sticky left-0 bg-slate-950/90 shadow-md">
         <div class="flex items-center justify-center gap-1.5">
           <button onclick="showDetailModal(${r.id})" class="p-1.5 rounded-lg bg-blue-900/40 hover:bg-blue-800 text-blue-300 transition" title="مشاهده کامل">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -3166,6 +4596,7 @@ function showDetailModal(id) {
         <div class="pt-2 border-t border-slate-800 space-y-1 text-xs">
           <div class="flex justify-between py-1 border-b border-slate-800/60"><span class="text-slate-400">کد تجهیز (ASETT ID):</span><span class="font-mono text-slate-200">${record.asett || '---'}</span></div>
           <div class="flex justify-between py-1 border-b border-slate-800/60"><span class="text-slate-400">شناسه داغی (rebuidable ID):</span><span class="font-mono text-slate-200">${record.rebuildable || '---'}</span></div>
+          <div class="flex justify-between py-1 border-b border-slate-800/60"><span class="text-slate-400">مدت زمان فعالیت:</span><span class="font-mono text-cyan-300 font-bold">${record.durationFormatted ? `${record.durationFormatted} (${record.durationDigital || ''})` : 'ثبت نشده'}</span></div>
           <div class="flex justify-between py-1 border-b border-slate-800/60"><span class="text-slate-400">موقعیت مکانی (GPS):</span>${mapLink}</div>
           <div class="flex justify-between py-1"><span class="text-slate-400">همکاران همراه:</span><span class="font-mono text-slate-200">${(record.colleagues || []).map(c => typeof c === 'object' && c !== null ? `${c.name} (${c.code})` : c).join('، ') || 'ندارد'}</span></div>
         </div>
@@ -3196,7 +4627,7 @@ async function confirmDeleteReport(id) {
 }
 
 // ==========================================
-// ۱۵. خروجی اکسل (Excel / CSV با BOM فارسی)
+// ۱۵. خروجی اکسل (Excel / CSV با ساختار جامع ۱۴ فیلد اطلاعاتی)
 // ==========================================
 function exportToExcel() {
   const list = window.AppState.filteredReports || window.AppState.allReports || [];
@@ -3206,72 +4637,88 @@ function exportToExcel() {
   }
 
   const headers = [
-    'شناسه',
-    'تاریخ شمسی',
-    'ساعت',
-    'نام و نام خانوادگی مجری',
-    'نام پدر',
+    'ردیف',
     'شماره پرسنلی',
-    'واحد خدمتی',
+    'نام و نام خانوادگی',
     'سرپرستی',
-    'سمت',
-    'نوع فعالیت',
-    'متراژ (متر)',
-    'شماره تجهیز',
-    'شماره مرجع ابزار',
-    'کد تجهیز (ASETT)',
-    'قطعه داغی (Rebuildable)',
+    'واحد',
+    'سمت سازمانی',
+    'ASETT ID',
+    'Rebuildble ID',
+    'نوع اقدام / فعالیت به همراه اطلاعات دیگر',
+    'مدت زمان فعالیت با ذکر دستی یا اتوماتیک',
+    'توضیحات تکمیلی',
     'همکاران همراه',
-    'عرض جغرافیایی (Lat)',
-    'طول جغرافیایی (Lng)',
-    'وضعیت همگام‌سازی',
-    'شرح کامل گزارش'
+    'تصویر تجهیز و محیط کار',
+    'زمان و تاریخ ثبت',
+    'موقعیت مکانی خودکار'
   ];
 
-  const rows = list.map((r) => {
-    const op = r.operator || {};
-    const cond = r.conditionalFields || {};
-    const loc = r.location || {};
-    const notesClean = (r.reportNotes || '').replace(/"/g, '""').replace(/\r?\n/g, ' ');
-
+  const dataRows = list.map((r, idx) => {
+    const d = getReportRowData(r, idx);
+    const photoStatus = d.photosList.length > 0 ? `${d.photosList.length} تصویر ثبت شده` : 'بدون تصویر';
     return [
-      r.id,
-      r.jalaliDate || '',
-      r.jalaliTime || '',
-      `"${op.firstName || ''} ${op.lastName || ''}"`,
-      `"${op.fatherName || ''}"`,
-      `"${op.personnelId || ''}"`,
-      `"${op.unit || ''}"`,
-      `"${op.supervision || ''}"`,
-      `"${op.role || ''}"`,
-      `"${r.activityType || ''}"`,
-      cond.footage || '',
-      `"${cond.equipmentId || cond.deviceTag || ''}"`,
-      `"${cond.referenceTool || ''}"`,
-      `"${r.asett || ''}"`,
-      `"${r.rebuildable || ''}"`,
-      `"${(r.colleagues || []).join(' - ')}"`,
-      loc.lat || '',
-      loc.lng || '',
-      r.syncStatus === 'synced' ? 'همگام‌شده' : 'در صف',
-      `"${notesClean}"`
-    ].join(',');
+      d.index,
+      d.personnelId,
+      d.fullName,
+      d.supervision,
+      d.unit,
+      d.role,
+      d.asett,
+      d.rebuildable,
+      d.activityFull,
+      d.durationWithMethod,
+      d.notes,
+      d.colleaguesStr,
+      photoStatus,
+      d.dateTimeStr,
+      d.locationStr
+    ];
   });
 
-  const csvContent = '\uFEFF' + headers.join(',') + '\n' + rows.join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.setAttribute('href', url);
-  link.setAttribute('download', `Automation_Graphs_${getFormattedJalali().dateNumStr.replace(/\//g, '-')}.csv`);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  showToast('فایل اکسل با موفقیت ایجاد و دانلود شد', 'success');
+  const filename = `گزارش_فعالیت_ها_${getFormattedJalali().dateNumStr.replace(/\//g, '-')}.xlsx`;
+
+  if (typeof XLSX !== 'undefined') {
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    if (!ws['!views']) ws['!views'] = [];
+    ws['!views'].push({ rightToLeft: true });
+    ws['!cols'] = [
+      { wch: 6 },
+      { wch: 14 },
+      { wch: 22 },
+      { wch: 20 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 35 },
+      { wch: 24 },
+      { wch: 30 },
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 22 },
+      { wch: 24 }
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'گزارش فعالیت‌ها');
+    XLSX.writeFile(wb, filename);
+    showToast('فایل اکسل با موفقیت ایجاد و دانلود شد', 'success');
+  } else {
+    const csvContent = '\uFEFF' + [headers, ...dataRows].map(row => row.map(c => `"${String(c || '').replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename.replace('.xlsx', '.csv'));
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('فایل اکسل با موفقیت ایجاد و دانلود شد', 'success');
+  }
 }
 
 // ==========================================
-// ۱۶. خروجی PDF و چاپ رسمی فرم صنعتی
+// ۱۶. خروجی PDF و چاپ رسمی فرم صنعتی با تمام فیلدهای درخواستی
 // ==========================================
 function printReportsAsPDF() {
   const list = window.AppState.filteredReports || window.AppState.allReports || [];
@@ -3289,23 +4736,25 @@ function printReportsAsPDF() {
   const jalaliNow = getFormattedJalali().fullPersian;
   let tableRows = '';
   list.forEach((r, idx) => {
-    const op = r.operator || {};
-    const cond = r.conditionalFields || {};
-    let extra = '';
-    if (cond.footage) extra = `متراژ: ${cond.footage}م`;
-    if (cond.equipmentId) extra = `تجهیز: ${cond.equipmentId}`;
-    if (cond.deviceTag) extra = `تگ: ${cond.deviceTag}`;
-
+    const d = getReportRowData(r, idx);
+    const photoText = d.photosList.length > 0 ? `${d.photosList.length} عکس` : '-';
     tableRows += `
       <tr>
-        <td style="text-align:center;">${idx + 1}</td>
-        <td>${r.jalaliDate} ${r.jalaliTime}</td>
-        <td>${op.firstName || ''} ${op.lastName || ''} (${op.personnelId || '-'})</td>
-        <td>${op.unit || '-'}</td>
-        <td><strong>${r.activityType}</strong> ${extra ? `<br><small>${extra}</small>` : ''}</td>
-        <td>ASETT: ${r.asett || '-'}<br>Rebuild: ${r.rebuildable || '-'}</td>
-        <td>${(r.reportNotes || '').slice(0, 100)}${(r.reportNotes || '').length > 100 ? '...' : ''}</td>
-        <td style="text-align:center;">${r.syncStatus === 'synced' ? 'تایید و ارسال' : 'محلی'}</td>
+        <td style="text-align:center;">${d.index}</td>
+        <td style="text-align:center; font-family:monospace; font-weight:bold;">${escapeHtml(d.personnelId)}</td>
+        <td>${escapeHtml(d.fullName)}</td>
+        <td>${escapeHtml(d.supervision)}</td>
+        <td>${escapeHtml(d.unit)}</td>
+        <td>${escapeHtml(d.role)}</td>
+        <td style="font-family:monospace;">${escapeHtml(d.asett)}</td>
+        <td style="font-family:monospace;">${escapeHtml(d.rebuildable)}</td>
+        <td>${escapeHtml(d.activityFull)}</td>
+        <td>${escapeHtml(d.durationWithMethod)}</td>
+        <td style="font-size:10px;">${escapeHtml(d.notes)}</td>
+        <td style="font-size:10px;">${escapeHtml(d.colleaguesStr)}</td>
+        <td style="text-align:center;">${photoText}</td>
+        <td style="font-size:10px;">${escapeHtml(d.dateTimeStr)}</td>
+        <td style="font-size:10px; font-family:monospace;" dir="ltr">${escapeHtml(d.locationStr)}</td>
       </tr>
     `;
   });
@@ -3317,16 +4766,17 @@ function printReportsAsPDF() {
       <meta charset="utf-8">
       <title>گزارش رسمی فعالیت‌های اتوماسیون و ارتباطات</title>
       <style>
-        body { font-family: Tahoma, 'Segoe UI', sans-serif; direction: rtl; padding: 25px; color: #111; }
-        .header { border-bottom: 2px solid #333; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
-        .header h2 { margin: 0; font-size: 18px; }
-        .header p { margin: 5px 0 0 0; font-size: 12px; color: #555; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
-        th, td { border: 1px solid #777; padding: 6px 8px; text-align: right; }
-        th { background: #f0f0f0; }
-        .signatures { margin-top: 50px; display: flex; justify-content: space-between; font-size: 12px; padding: 0 40px; }
+        body { font-family: Tahoma, 'Segoe UI', sans-serif; direction: rtl; padding: 15px; color: #111; font-size: 11px; }
+        .header { border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
+        .header h2 { margin: 0; font-size: 16px; color: #0f172a; }
+        .header p { margin: 4px 0 0 0; font-size: 11px; color: #475569; }
+        table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 10px; }
+        th, td { border: 1px solid #64748b; padding: 5px 6px; text-align: right; }
+        th { background: #f1f5f9; color: #0f172a; font-weight: bold; }
+        tr:nth-child(even) { background: #f8fafc; }
+        .signatures { margin-top: 40px; display: flex; justify-content: space-between; font-size: 11px; padding: 0 30px; page-break-inside: avoid; }
         @media print {
-          @page { size: landscape; margin: 15mm; }
+          @page { size: landscape; margin: 10mm; }
           button { display: none; }
         }
       </style>
@@ -3335,25 +4785,32 @@ function printReportsAsPDF() {
       <div class="header">
         <div>
           <h2>مدیریت اتوماسیون و ارتباطات</h2>
-          <p>صورت‌جلسه و گراف رسمی فعالیت‌های فنی، تعمیراتی و نگهداری میدانی</p>
+          <p>صورت‌جلسه و گزارش رسمی فعالیت‌های ثبت‌شده، نگهداری و تعمیرات میدانی</p>
         </div>
-        <div style="text-align:left; font-size:12px;">
-          <div>تاریخ چاپ: ${jalaliNow}</div>
-          <div>تعداد رکوردها: ${list.length}</div>
+        <div style="text-align:left; font-size:11px;">
+          <div><strong>تاریخ تهیه گزارش:</strong> ${jalaliNow}</div>
+          <div><strong>تعداد رکوردها:</strong> ${list.length}</div>
         </div>
       </div>
 
       <table>
         <thead>
           <tr>
-            <th style="width:30px;">ردیف</th>
-            <th style="width:90px;">تاریخ/ساعت</th>
-            <th style="width:130px;">مجری (پرسنلی)</th>
-            <th style="width:100px;">واحد خدمتی</th>
-            <th style="width:140px;">نوع فعالیت</th>
-            <th style="width:110px;">کدهای تجهیز</th>
-            <th>شرح خلاصه اقدام</th>
-            <th style="width:70px;">وضعیت</th>
+            <th style="width:25px; text-align:center;">#</th>
+            <th style="width:65px; text-align:center;">پرسنلی</th>
+            <th style="width:110px;">نام و نام خانوادگی</th>
+            <th style="width:85px;">سرپرستی</th>
+            <th style="width:75px;">واحد</th>
+            <th style="width:75px;">سمت</th>
+            <th style="width:65px;">ASETT ID</th>
+            <th style="width:65px;">Rebuildble</th>
+            <th style="width:130px;">نوع اقدام و فعالیت</th>
+            <th style="width:100px;">مدت زمان (دستی/اتوماتیک)</th>
+            <th>توضیحات تکمیلی</th>
+            <th style="width:90px;">همکاران همراه</th>
+            <th style="width:45px; text-align:center;">تصویر</th>
+            <th style="width:105px;">زمان و تاریخ ثبت</th>
+            <th style="width:95px;">موقعیت مکانی</th>
           </tr>
         </thead>
         <tbody>
@@ -3364,7 +4821,7 @@ function printReportsAsPDF() {
       <div class="signatures">
         <div><strong>امضاء تکنسین / مجری عملیات</strong><br><br>.....................................</div>
         <div><strong>امضاء سرپرست مربوطه</strong><br><br>.....................................</div>
-        <div><strong>تایید رئیس اداره اتوماسیون و ارتباطات</strong><br><br>.....................................</div>
+        <div><strong>تایید مدیریت اتوماسیون و ارتباطات</strong><br><br>.....................................</div>
       </div>
       <script>
         window.onload = function() { window.print(); };
@@ -3494,7 +4951,7 @@ async function loadAdminUsersList() {
     const list = await getAdminsList();
     container.innerHTML = '';
 
-    // ردیف مدیر ارشد سیستم (Super Admin)
+    // ۱. ردیف مدیر ارشد سیستم (admin)
     const superRow = document.createElement('div');
     superRow.className = 'p-3.5 rounded-xl bg-slate-900/80 border border-amber-500/30 shadow-sm space-y-2';
     superRow.innerHTML = `
@@ -3520,7 +4977,36 @@ async function loadAdminUsersList() {
     `;
     container.appendChild(superRow);
 
-    if (list.length === 0) {
+    // ۲. ردیف مدیر اتوماسیون و ارتباطات (مهندس محسن جعفری - نام کاربری 417734)
+    const managerRow = document.createElement('div');
+    managerRow.className = 'p-3.5 rounded-xl bg-slate-900/80 border border-cyan-500/30 shadow-sm space-y-2';
+    managerRow.innerHTML = `
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="font-extrabold text-cyan-300 text-sm">مهندس محسن جعفری (مدیراتوماسیون و ارتباطات )</span>
+          <span class="text-[11px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 px-2 py-0.5 rounded-md font-bold">مدیر ارشد (417734)</span>
+        </div>
+        <span class="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-bold">دسترسی جامع و نامحدود</span>
+      </div>
+      <div class="text-xs text-slate-400 font-mono">نام کاربری: 417734</div>
+      <div class="text-[11px] text-emerald-400 font-sans font-medium flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block"></span>
+        <span>حوزه دسترسی سازمانی: تمام سرپرستی‌ها و تمام واحدهای سازمان</span>
+      </div>
+      <div class="flex flex-wrap gap-1.5 pt-1 border-t border-slate-800/80">
+        <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">✓ دسترسی کامل به همه ماژول‌ها</span>
+        <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">✓ تعریف سرپرستی‌ها و واحدها</span>
+        <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">✓ تعریف و سطوح مدیران</span>
+        <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">✓ پشتیبان‌گیری و بازنشانی</span>
+        <span class="text-[10px] bg-teal-500/10 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded font-bold">✓ ماژول پرسنل (کامل)</span>
+        <span class="text-[10px] bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded font-bold">✓ ماژول asset &Rebuidble (کامل)</span>
+      </div>
+    `;
+    container.appendChild(managerRow);
+
+    const subAdmins = list.filter((a) => a.username !== 'admin' && a.username !== '417734' && a.username !== '417737');
+
+    if (subAdmins.length === 0) {
       const p = document.createElement('div');
       p.className = 'text-xs text-slate-400 p-3.5 text-center bg-slate-900/30 rounded-xl border border-dashed border-slate-800';
       p.textContent = 'مدیر فرعی دیگری هنوز تعریف نشده است. از فرم بالا برای تعریف مدیر با حوزه و دسترسی‌های مشخص استفاده نمایید.';
@@ -3528,7 +5014,7 @@ async function loadAdminUsersList() {
       return;
     }
 
-    list.forEach((admin) => {
+    subAdmins.forEach((admin) => {
       const isGlobalSup = !admin.supervision || admin.supervision === 'همه سرپرستی‌ها' || admin.supervision === 'کل سرپرستی‌ها';
       const isGlobalUnit = !admin.unit || admin.unit === 'همه واحدها' || admin.unit === 'کل واحدها' || admin.unit === 'همه واحدهای سرپرستی';
 
@@ -3736,8 +5222,8 @@ async function handleCreateNewAdmin(e) {
     showToast('نام کاربری و رمز عبور الزامی است', 'error');
     return;
   }
-  if (username === 'admin') {
-    showToast('نام کاربری admin مخصوص مدیر ارشد است', 'error');
+  if (username === 'admin' || username === '417734' || username === '417737') {
+    showToast('نام کاربری admin و 417734 مخصوص مدیران ارشد سیستم است', 'error');
     return;
   }
 
@@ -4084,15 +5570,15 @@ async function handleEditAdminSubmit(e) {
 // ==========================================
 // ۱۹. مدیریت سرپرستی‌ها و واحدهای سازمانی (Org Structure)
 // ==========================================
-const ORG_STRUCTURE_VERSION = 'v3_telecom_tech_workshops';
+var ORG_STRUCTURE_VERSION = 'v3_telecom_tech_workshops';
 
-const DEFAULT_SUPERVISIONS = [
+var DEFAULT_SUPERVISIONS = [
   'سرپرستی مخابرات',
   'سرپرستی خدمات فنی',
   'سرپرستی اتوماسیون کارگاه ها'
 ];
 
-const DEFAULT_UNITS = [
+var DEFAULT_UNITS = [
   // سرپرستی مخابرات
   { name: 'واحد اعلام حریق', supervision: 'سرپرستی مخابرات' },
   { name: 'واحد صوتی و تصویری', supervision: 'سرپرستی مخابرات' },
@@ -4645,6 +6131,154 @@ function dismissPWABanner() {
   localStorage.setItem('pwa_banner_dismissed', 'true');
 }
 
+var newWorkerWaiting = null;
+var updateBannerDismissed = false;
+var pendingUpdateServerVersion = null;
+
+function parseVersionNumbers(v) {
+  if (!v) return [0, 0, 0];
+  const cleaned = String(v).replace(/^v/i, '').trim();
+  const parts = cleaned.split('.').map(x => parseInt(x, 10) || 0);
+  while (parts.length < 3) parts.push(0);
+  return parts;
+}
+
+function isVersionNewer(newVer, baseVer) {
+  if (!newVer || !baseVer) return false;
+  const n = parseVersionNumbers(newVer);
+  const b = parseVersionNumbers(baseVer);
+  for (let i = 0; i < Math.max(n.length, b.length); i++) {
+    const numN = n[i] || 0;
+    const numB = b[i] || 0;
+    if (numN > numB) return true;
+    if (numN < numB) return false;
+  }
+  return false;
+}
+
+function getCurrentPwaVersion() {
+  const stored = localStorage.getItem('app_installed_version');
+  if (stored && isVersionNewer(stored, APP_VERSION)) {
+    return stored;
+  }
+  return APP_VERSION;
+}
+
+function showPwaUpdateBanner(latestVersion) {
+  const currentVer = getCurrentPwaVersion();
+  // ۱. بررسی قطعی: آیا نسخه سرور حقیقتاً بالاتر از نسخه نصب‌شده است؟
+  if (!latestVersion || !isVersionNewer(latestVersion, currentVer)) {
+    return;
+  }
+  // ۲. بررسی قطعی: اگر این بروزرسانی قبلاً دریافت شده باشد، دیگر نباید نمایش داده شود
+  if (localStorage.getItem(`pwa_update_received_${latestVersion}`) === 'true') {
+    return;
+  }
+  if (updateBannerDismissed) return;
+
+  pendingUpdateServerVersion = latestVersion;
+  const banner = document.getElementById('pwaUpdateBanner');
+  const msgEl = document.getElementById('pwaUpdateMessage');
+  if (banner) {
+    if (msgEl) {
+      msgEl.textContent = `نگارش جدید (${latestVersion}) منتشر شده است (نسخه فعلی شما: v${currentVer}). جهت اعمال و بارگذاری سریع کلیک کنید:`;
+    }
+    banner.classList.remove('hidden');
+  }
+}
+
+function dismissAppUpdate() {
+  updateBannerDismissed = true;
+  const banner = document.getElementById('pwaUpdateBanner');
+  if (banner) banner.classList.add('hidden');
+}
+
+async function applyAppUpdate() {
+  const targetVer = pendingUpdateServerVersion || APP_VERSION;
+
+  // ۱. فوراً ماژول پنهان شود تا به هیچ عنوان مجدداً نمایش داده نشود
+  dismissAppUpdate();
+
+  // ۲. ثبت قطعی دریافت این نسخه در حافظه دائم مرورگر تا پس از رفرش دیگر هرگز نمایش داده نشود
+  localStorage.setItem('app_installed_version', targetVer);
+  localStorage.setItem(`pwa_update_received_${targetVer}`, 'true');
+
+  showToast('در حال بارگذاری نگارش جدید و به‌روزرسانی اپلیکیشن...', 'info');
+
+  try {
+    if (newWorkerWaiting) {
+      newWorkerWaiting.postMessage({ type: 'SKIP_WAITING' });
+    } else if (window.swRegistration && window.swRegistration.waiting) {
+      window.swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+
+    if (window.swRegistration) {
+      try {
+        await window.swRegistration.update();
+      } catch (e) {}
+    }
+
+    setTimeout(() => {
+      window.location.reload(true);
+    }, 450);
+  } catch (err) {
+    console.error('Update apply error:', err);
+    window.location.reload(true);
+  }
+}
+
+async function checkAppUpdate(isManual = false) {
+  const currentVer = getCurrentPwaVersion();
+  if (isManual) {
+    showToast('در حال بررسی نسخه جدید بر روی سرور...', 'info');
+  }
+
+  try {
+    const res = await fetch(`/version.json?_t=${Date.now()}`, { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      const serverVersion = (data.version || '').trim();
+
+      // شرط اصلی: ماژول آپدیت فقط در صورت پایین‌تر بودن نسخه PWA نصب‌شده نمایش داده شود
+      if (serverVersion && isVersionNewer(serverVersion, currentVer)) {
+        // و اگر کاربر قبلاً دکمه دریافت را نزده باشد
+        if (localStorage.getItem(`pwa_update_received_${serverVersion}`) !== 'true') {
+          showPwaUpdateBanner(serverVersion);
+          if (isManual) {
+            showToast(`نگارش جدید (${serverVersion}) در دسترس است! لطفاً دکمه بروزرسانی را لمس فرمایید.`, 'success');
+          }
+          return;
+        }
+      }
+    }
+
+    if (window.swRegistration) {
+      try {
+        await window.swRegistration.update();
+      } catch (e) {
+        console.warn('SW update check note:', e);
+      }
+      if (window.swRegistration.waiting) {
+        newWorkerWaiting = window.swRegistration.waiting;
+      }
+    }
+
+    if (isManual) {
+      showToast(`شما در حال حاضر از آخرین نگارش سامانه (v${currentVer}) استفاده می‌فرمایید.`, 'success');
+    }
+  } catch (err) {
+    console.warn('checkAppUpdate failed:', err);
+    if (isManual) {
+      showToast(`اتصال به سرور بررسی نشد (نسخه فعلی: v${currentVer}).`, 'warning');
+    }
+  }
+}
+
 function setupPWAInstall() {
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
                        window.navigator.standalone === true;
@@ -4655,7 +6289,8 @@ function setupPWAInstall() {
 
   if (isStandalone) {
     if (btn) btn.classList.add('hidden');
-    if (badge) badge.classList.remove('hidden');
+    // طبق درخواست کاربر نشانگر و عبارت «نصب شده» از سربرگ حذف گردید
+    if (badge) badge.classList.add('hidden');
     if (banner) banner.classList.add('hidden');
   } else {
     if (btn) btn.classList.remove('hidden');
@@ -4678,13 +6313,58 @@ function setupPWAInstall() {
     showToast('نصب اپلیکیشن ثبت گراف با موفقیت تکمیل شد', 'success');
   });
 
-  // ثبت مطمئن و پایدار Service Worker
+  // ثبت مطمئن و پایدار Service Worker با بررسی خودکار بروزرسانی‌ها برای حالت نصب‌شده (PWA)
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
       .then((reg) => {
+        window.swRegistration = reg;
         console.log('[PWA] Service Worker registered with scope:', reg.scope);
+
+        if (reg.waiting) {
+          newWorkerWaiting = reg.waiting;
+          checkAppUpdate(false);
+        }
+
+        reg.addEventListener('updatefound', () => {
+          const installingWorker = reg.installing;
+          if (!installingWorker) return;
+          installingWorker.addEventListener('statechange', () => {
+            if (installingWorker.state === 'installed') {
+              if (navigator.serviceWorker.controller) {
+                newWorkerWaiting = installingWorker;
+                checkAppUpdate(false);
+              }
+            }
+          });
+        });
       })
       .catch((err) => console.warn('[PWA] Service Worker registration failed:', err));
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) {
+        refreshing = true;
+        window.location.reload();
+      }
+    });
+
+    // بروزرسانی نشانگرهای نگارش در هدر و صفحه درباره سامانه بر اساس نسخه جاری
+    const curV = getCurrentPwaVersion();
+    const headerVerEl = document.getElementById('appHeaderVersionBadge');
+    if (headerVerEl) headerVerEl.textContent = 'v' + curV;
+    const aboutVerEl = document.getElementById('aboutModalVersionBadge');
+    if (aboutVerEl) aboutVerEl.textContent = 'v' + curV;
+
+    // بررسی خودکار نسخه سرور در فواصل زمانی مشخص
+    setTimeout(() => {
+      checkAppUpdate(false);
+    }, 3500);
+
+    setInterval(() => {
+      if (navigator.onLine) {
+        checkAppUpdate(false);
+      }
+    }, 15 * 60 * 1000);
   }
 }
 
@@ -4699,6 +6379,8 @@ document.addEventListener('DOMContentLoaded', () => {
   renderOrgManagementUI();
   updateLiveClock();
   setInterval(updateLiveClock, 1000);
+  updateStopwatchDisplay();
+  updateDurationFormattedDisplay();
   startAutoGPS();
   setupCameraInput();
   updateNetworkStatusIndicator();
@@ -5124,7 +6806,7 @@ function showAdminTab(tabName) {
       if (session) user = JSON.parse(session);
     } catch (e) {}
   }
-  const isSuper = !user || user.username === 'admin' || user.isSuperAdmin;
+  const isSuper = !user || user.username === 'admin' || user.username === '417734' || user.username === '417737' || user.isSuperAdmin;
 
   const canOrg = isSuper || !!(user && user.permissions && user.permissions.orgManage);
   const canAdmin = isSuper || !!(user && user.permissions && user.permissions.adminManage);
@@ -5194,7 +6876,7 @@ function showAdminTab(tabName) {
 // ==========================================
 // ۲۲. ماژول بانک اطلاعات تجهیزات و قطعات بازسازی (asset &Rebuidble)
 // ==========================================
-const DEFAULT_INITIAL_ASSETS = [];
+var DEFAULT_INITIAL_ASSETS = [];
 
 function getUserAssetScope() {
   let user = window.AppState && window.AppState.currentUser;
@@ -5204,7 +6886,7 @@ function getUserAssetScope() {
       if (session) user = JSON.parse(session);
     } catch (e) {}
   }
-  const isSuper = !user || user.username === 'admin' || user.isSuperAdmin;
+  const isSuper = !user || user.username === 'admin' || user.username === '417734' || user.username === '417737' || user.isSuperAdmin;
   const userSup = user && user.supervision ? user.supervision.trim() : '';
   const userUnit = user && user.unit ? user.unit.trim() : '';
 
@@ -5255,6 +6937,7 @@ async function initAssetRebuildables() {
       localStorage.setItem('automation_asset_rebuildables', JSON.stringify(records));
     }
   }
+  records = await ensureDefaultAssetRebuildables(records);
   window.AppState.assetRecords = records || [];
   await populateAsettDatalist();
   return window.AppState.assetRecords;
@@ -6123,6 +7806,22 @@ window.switchInstallTab = switchInstallTab;
 window.handlePWAInstallClick = handlePWAInstallClick;
 window.triggerDirectInstall = triggerDirectInstall;
 window.dismissPWABanner = dismissPWABanner;
+// توابع ماژول مدت زمان و کرنومتر
+window.toggleStopwatchPanel = toggleStopwatchPanel;
+window.openStopwatchModal = openStopwatchModal;
+window.closeStopwatchModal = closeStopwatchModal;
+window.toggleStopwatchStartPause = toggleStopwatchStartPause;
+window.startStopwatch = startStopwatch;
+window.pauseStopwatch = pauseStopwatch;
+window.resetStopwatch = resetStopwatch;
+window.handleStopwatchSet = handleStopwatchSet;
+window.syncStopwatchFromFormInputs = syncStopwatchFromFormInputs;
+window.syncStopwatchTimeToFormInputs = syncStopwatchTimeToFormInputs;
+window.applyStopwatchTimeToForm = applyStopwatchTimeToForm;
+window.saveDurationTime = saveDurationTime;
+window.updateDurationFormattedDisplay = updateDurationFormattedDisplay;
+window.clearDurationInputs = clearDurationInputs;
+
 // توابع ماژول asset &Rebuidble
 window.renderAssetRebuildableUI = renderAssetRebuildableUI;
 window.openAddAssetModal = openAddAssetModal;
@@ -6145,4 +7844,42 @@ window.handleRebuildableSelectChange = handleRebuildableSelectChange;
 window.clearRebuildableSelection = clearRebuildableSelection;
 window.syncRebuildablesForAsett = syncRebuildablesForAsett;
 window.populateAsettDatalist = populateAsettDatalist;
+window.DEFAULT_ASSET_REBUILDABLES = DEFAULT_ASSET_REBUILDABLES;
+window.ensureDefaultAssetRebuildables = ensureDefaultAssetRebuildables;
+
+// توابع تقویم هجری شمسی و ساعت آنالوگ ماژول گزارش‌ها و کارتابل
+window.openPersianCalendarModal = openPersianCalendarModal;
+window.closePersianCalendarModal = closePersianCalendarModal;
+window.switchCalendarTarget = switchCalendarTarget;
+window.navigateCalendarMonth = navigateCalendarMonth;
+window.onCalendarSelectChange = onCalendarSelectChange;
+window.selectCalendarDay = selectCalendarDay;
+window.applyQuickDatePreset = applyQuickDatePreset;
+window.confirmPersianCalendarSelection = confirmPersianCalendarSelection;
+window.clearDateFilters = clearDateFilters;
+
+window.openAnalogClockModal = openAnalogClockModal;
+window.closeAnalogClockModal = closeAnalogClockModal;
+window.switchClockTarget = switchClockTarget;
+window.setClockSelectionMode = setClockSelectionMode;
+window.adjustClockValue = adjustClockValue;
+window.applyClockShiftPreset = applyClockShiftPreset;
+window.clearClockFilter = clearClockFilter;
+window.confirmAnalogClockSelection = confirmAnalogClockSelection;
+window.clearTimeFilters = clearTimeFilters;
+window.getReportRowData = getReportRowData;
+
+// مدیریت صفحه درباره سامانه و شناسنامه نرم‌افزار
+if (typeof openAboutSystemPage !== 'undefined') {
+  window.openAboutSystemPage = openAboutSystemPage;
+  window.transitionToAboutContent = transitionToAboutContent;
+  window.closeAboutSystemPage = closeAboutSystemPage;
+}
+
+// مدیریت نسخه و بروزرسانی اپلیکیشن در حالت نصب‌شده PWA
+window.checkAppUpdate = checkAppUpdate;
+window.applyAppUpdate = applyAppUpdate;
+window.dismissAppUpdate = dismissAppUpdate;
+window.APP_VERSION = APP_VERSION;
+
 
