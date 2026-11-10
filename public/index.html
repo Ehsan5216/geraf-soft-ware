@@ -272,6 +272,9 @@
   <!-- jsQR Library for fast robust in-browser QR & Barcode scanning across all devices -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
 
+  <!-- SheetJS (xlsx) Library for Excel parsing and generation -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <!-- Google Font: Vazirmatn for crisp Persian industrial typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -2181,10 +2184,16 @@
           <table class="w-full text-right text-xs text-slate-300">
             <thead class="bg-slate-950/80 text-slate-400 uppercase text-[11px] border-b border-slate-800">
               <tr>
-                <th class="py-3 px-3 w-14 text-center">ردیف</th>
-                <th class="py-3 px-4 w-36">شماره پرسنلی (ستون A)</th>
-                <th class="py-3 px-4">نام و نام خانوادگی پرسنل (ستون B)</th>
-                <th class="py-3 px-4 w-28 text-center">عملیات</th>
+                <th class="py-3 px-2 w-12 text-center">ردیف</th>
+                <th class="py-3 px-3 w-28">شماره پرسنلی</th>
+                <th class="py-3 px-3 w-36">نام و نام خانوادگی</th>
+                <th class="py-3 px-3 w-28">کد ملی</th>
+                <th class="py-3 px-3 w-28">تلفن همراه</th>
+                <th class="py-3 px-3 w-36">مدیریت</th>
+                <th class="py-3 px-3 w-28">سرپرستی</th>
+                <th class="py-3 px-3 w-28">واحد خدمتی</th>
+                <th class="py-3 px-3 w-36">عنوان سمت</th>
+                <th class="py-3 px-3 w-24 text-center">عملیات</th>
               </tr>
             </thead>
             <tbody id="personnelTableBody" class="divide-y divide-slate-800/60 font-sans">

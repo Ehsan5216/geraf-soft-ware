@@ -7630,7 +7630,11 @@ function renderPersonnelTable() {
     filtered = allPersonnel.filter((p) => {
       const code = String(p.code || '').toLowerCase();
       const name = String(p.name || '').toLowerCase();
-      return code.includes(query) || name.includes(query);
+      const nid = String(p.nationalId || '').toLowerCase();
+      const sup = String(p.supervision || '').toLowerCase();
+      const unit = String(p.serviceUnit || p.unit || '').toLowerCase();
+      const role = String(p.jobTitle || p.role || '').toLowerCase();
+      return code.includes(query) || name.includes(query) || nid.includes(query) || sup.includes(query) || unit.includes(query) || role.includes(query);
     });
   }
 
@@ -7665,7 +7669,7 @@ function renderPersonnelTable() {
   if (pageItems.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="4" class="py-10 text-center text-slate-500 font-sans">
+        <td colspan="10" class="py-10 text-center text-slate-500 font-sans">
           پرسنلی با مشخصات جستجو شده یافت نشد.
         </td>
       </tr>
@@ -7674,15 +7678,28 @@ function renderPersonnelTable() {
     tbody.innerHTML = pageItems.map((p, idx) => {
       const rowNum = startIndex + idx + 1;
       const safeCode = escapeHtml(p.code);
-      const safeName = escapeHtml(p.name);
+      const safeName = escapeHtml(p.name || `${p.firstName || ''} ${p.lastName || ''}`);
+      const safeNId = escapeHtml(p.nationalId || '---');
+      const safeMobile = escapeHtml(p.mobile ? ('0' + String(p.mobile).replace(/^0+/, '')) : '---');
+      const safeMgmt = escapeHtml(p.management || 'مدیریت اتوماسیون و ارتباطات');
+      const safeSup = escapeHtml(p.supervision || '---');
+      const safeUnit = escapeHtml(p.serviceUnit || p.unit || '---');
+      const safeRole = escapeHtml(p.jobTitle || p.role || '---');
+
       return `
         <tr class="hover:bg-slate-800/50 transition border-b border-slate-800/40">
-          <td class="py-2.5 px-3 text-center text-slate-500 text-[11px] font-mono">${rowNum}</td>
-          <td class="py-2.5 px-4 font-mono font-bold text-amber-300">${safeCode}</td>
-          <td class="py-2.5 px-4 text-slate-200 font-medium">${safeName}</td>
-          <td class="py-2.5 px-4 text-center">
+          <td class="py-2.5 px-2 text-center text-slate-500 text-[11px] font-mono">${rowNum}</td>
+          <td class="py-2.5 px-3 font-mono font-bold text-amber-300">${safeCode}</td>
+          <td class="py-2.5 px-3 text-slate-200 font-medium">${safeName}</td>
+          <td class="py-2.5 px-3 font-mono text-slate-300">${safeNId}</td>
+          <td class="py-2.5 px-3 font-mono text-slate-300">${safeMobile}</td>
+          <td class="py-2.5 px-3 text-slate-300">${safeMgmt}</td>
+          <td class="py-2.5 px-3 text-amber-200">${safeSup}</td>
+          <td class="py-2.5 px-3 text-emerald-300">${safeUnit}</td>
+          <td class="py-2.5 px-3 text-slate-100">${safeRole}</td>
+          <td class="py-2.5 px-3 text-center">
             <div class="flex items-center justify-center gap-1.5">
-              <button type="button" onclick="editPersonnelRecord('${safeCode}')" class="px-2 py-1 text-[11px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 rounded-lg transition" title="ویرایش نام پرسنل">
+              <button type="button" onclick="editPersonnelRecord('${safeCode}')" class="px-2 py-1 text-[11px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 hover:text-amber-200 border border-amber-500/30 rounded-lg transition" title="ویرایش پرسنل">
                 ویرایش
               </button>
               <button type="button" onclick="confirmDeletePersonnel('${safeCode}')" class="px-2 py-1 text-[11px] bg-red-950/40 hover:bg-red-900/60 text-red-300 hover:text-red-100 border border-red-800/60 rounded-lg transition active:scale-95" title="حذف از بانک پرسنل">
