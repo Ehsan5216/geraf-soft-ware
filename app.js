@@ -4,7 +4,7 @@
  */
 
 // نسخه رسمی و سراسری پروژه - پس از هر بار تغییرات، این نسخه تغییر می‌یابد تا برنامه‌های نصب‌شده قدیمی بروزرسانی شوند
-var APP_VERSION = '2.5.7';
+var APP_VERSION = '3.0.0';
 window.APP_VERSION = APP_VERSION;
 
 // ==========================================
@@ -120,11 +120,19 @@ function openDB() {
 async function saveGraphRecord(record) {
   const db = await openDB();
   return new Promise((resolve, reject) => {
-    const tx = db.transaction('graphs', 'readwrite');
-    const store = tx.objectStore('graphs');
-    const req = store.add(record);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    try {
+      const tx = db.transaction('graphs', 'readwrite');
+      const store = tx.objectStore('graphs');
+      const cleanRecord = JSON.parse(JSON.stringify(record));
+      if (cleanRecord.id === undefined || cleanRecord.id === null) {
+        delete cleanRecord.id;
+      }
+      const req = store.add(cleanRecord);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    } catch (err) {
+      reject(err);
+    }
   });
 }
 
@@ -392,22 +400,22 @@ async function deleteAssetRebuildableRecordFromDB(id) {
 // ==========================================
 // ۳. وضعیت برنامه، پوسته (تم) و متغیرهای سراسری
 // ==========================================
-window.AppState = {
+window.AppState = window.AppState || {
   currentView: 'home',
   currentUser: null,
   operator: null,
   capturedImageBase64: null,
-  capturedImages: [], // پشتیبانی از چندین عکس
-  addedActivities: [], // پشتیبانی از افزودن چندین فعالیت پویا (دکمه ADD)
+  capturedImages: [],
+  addedActivities: [],
   currentLocation: { lat: null, lng: null, accuracy: null, timestamp: null },
   colleagues: [],
-  personnel: [], // بانک اطلاعات پرسنل اکسل (کد پرسنلی و نام)
-  personnelMap: new Map(), // مپ سریع بر اساس کد پرسنلی
+  personnel: [],
+  personnelMap: new Map(),
   personnelSearchQuery: '',
   personnelCurrentPage: 1,
   personnelPageSize: 50,
-  assetRecords: [], // لیست رکوردهای تجهیزات و قطعات بازسازی
-  filteredAssetRecords: [], // رکوردهای فیلترشده جاری برای کاربر
+  assetRecords: [],
+  filteredAssetRecords: [],
   assetSearchQuery: '',
   assetFilterSupervision: '',
   assetFilterUnit: '',
@@ -416,6 +424,10 @@ window.AppState = {
   activeCameraStream: null,
   theme: localStorage.getItem('automation_app_theme') || 'dark',
 };
+
+if (!window.AppState.addedActivities) {
+    window.AppState.addedActivities = [];
+}
 
 function applyTheme(themeName) {
   const isLight = themeName === 'light';
@@ -475,15 +487,10 @@ function loadOperatorProfile() {
       if (window.AppState.operator && window.AppState.operator.personnelId) {
         const match = findPersonnelByCode(window.AppState.operator.personnelId);
         if (match) {
-          const parsed = parsePersonnelFullName(match.name);
           let changed = false;
-          if (!window.AppState.operator.fatherName && parsed.fatherName) {
-            window.AppState.operator.fatherName = parsed.fatherName;
-            changed = true;
-          }
-          if ((!window.AppState.operator.firstName || !window.AppState.operator.lastName) && (parsed.firstName || parsed.lastName)) {
-            window.AppState.operator.firstName = window.AppState.operator.firstName || parsed.firstName;
-            window.AppState.operator.lastName = window.AppState.operator.lastName || parsed.lastName;
+          if (!window.AppState.operator.firstName || !window.AppState.operator.lastName) {
+            window.AppState.operator.firstName = match.firstName || '';
+            window.AppState.operator.lastName = match.lastName || '';
             changed = true;
           }
           if (changed) {
@@ -498,106 +505,211 @@ function loadOperatorProfile() {
   updateOperatorSummaryUI();
 }
 
+let _operatorAutoSaveTimer = null;
+let _pendingOperatorData = null;
+
+function toggleOperatorAccordion(forceState) {
+  const acc = document.getElementById('operatorDetailsAccordion');
+  const icon = document.getElementById('operatorAccordionIcon');
+  const btnText = document.getElementById('operatorAccordionBtnText');
+  if (!acc) return;
+
+  const isCurrentlyOpen = !acc.classList.contains('hidden');
+  const shouldOpen = forceState !== undefined ? forceState : !isCurrentlyOpen;
+
+  if (shouldOpen) {
+    acc.classList.remove('hidden');
+    if (icon) icon.style.transform = 'rotate(180deg)';
+    if (btnText) btnText.textContent = 'بستن مشخصات';
+  } else {
+    acc.classList.add('hidden');
+    if (icon) icon.style.transform = 'rotate(0deg)';
+    if (btnText) btnText.textContent = 'مشاهده مشخصات';
+  }
+}
+window.toggleOperatorAccordion = toggleOperatorAccordion;
+
+function renderOperatorFields(op) {
+  if (!op) return;
+  const fullName = op.name || `${op.firstName || ''} ${op.lastName || ''}`.trim() || '---';
+  const pid = op.personnelId || op.code || '---';
+  const nid = op.nationalId || '---';
+  const mobile = op.mobile ? ('0' + String(op.mobile).replace(/^0+/, '')) : '---';
+  const management = op.management || 'مدیریت اتوماسیون و ارتباطات';
+  const supervision = op.supervision || '---';
+  const unit = op.unit || op.serviceUnit || '---';
+  const role = op.role || op.jobTitle || '---';
+
+  const headerShortEl = document.getElementById('dispHeaderShortInfo');
+  if (headerShortEl) {
+    headerShortEl.textContent = `${fullName} (${pid})`;
+  }
+
+  const fnEl = document.getElementById('dispFullName');
+  if (fnEl) fnEl.textContent = fullName;
+  const pidEl = document.getElementById('dispPersonnelId');
+  if (pidEl) pidEl.textContent = pid;
+  const nidEl = document.getElementById('dispNationalId');
+  if (nidEl) nidEl.textContent = nid;
+  const mobEl = document.getElementById('dispMobile');
+  if (mobEl) mobEl.textContent = mobile;
+  const mgmtEl = document.getElementById('dispManagement');
+  if (mgmtEl) mgmtEl.textContent = management;
+  const supEl = document.getElementById('dispSupervision');
+  if (supEl) supEl.textContent = supervision;
+  const unitEl = document.getElementById('dispUnit');
+  if (unitEl) unitEl.textContent = unit;
+  const roleEl = document.getElementById('dispRole');
+  if (roleEl) roleEl.textContent = role;
+
+  // سازگاری با المان‌های قدیمی
+  const opFn = document.getElementById('opFullName');
+  if (opFn) opFn.textContent = fullName;
+  const opPid = document.getElementById('opPersonnelId');
+  if (opPid) opPid.textContent = pid;
+  const opUnitEl = document.getElementById('opUnit');
+  if (opUnitEl) opUnitEl.textContent = unit;
+  const opSupEl = document.getElementById('opSupervision');
+  if (opSupEl) opSupEl.textContent = supervision;
+  const opRoleEl = document.getElementById('opRole');
+  if (opRoleEl) opRoleEl.textContent = role;
+}
+window.renderOperatorFields = renderOperatorFields;
+
 function updateOperatorSummaryUI() {
   const container = document.getElementById('operatorSummaryContainer');
   const alertBox = document.getElementById('operatorMissingAlert');
+  const noticeBox = document.getElementById('operatorAutoSaveNotice');
+  const commitNowBtn = document.getElementById('commitNowBtn');
+  const statusBadge = document.getElementById('operatorStatusBadge');
   const op = window.AppState.operator;
 
-  if (op && op.firstName && op.lastName && op.personnelId) {
+  if (op && (op.firstName || op.name) && op.personnelId) {
     if (alertBox) alertBox.classList.add('hidden');
-    if (container) {
-      container.classList.remove('hidden');
-      const fnEl = document.getElementById('opFullName');
-      if (fnEl) fnEl.textContent = `${op.firstName} ${op.lastName}`;
-      const pidEl = document.getElementById('opPersonnelId');
-      if (pidEl) pidEl.textContent = op.personnelId;
-      const unitEl = document.getElementById('opUnit');
-      if (unitEl) unitEl.textContent = op.unit || '---';
-      const supEl = document.getElementById('opSupervision');
-      if (supEl) supEl.textContent = op.supervision || '---';
-      const roleEl = document.getElementById('opRole');
-      if (roleEl) roleEl.textContent = op.role || '---';
-      const fathEl = document.getElementById('opFatherName');
-      if (fathEl) fathEl.textContent = op.fatherName || '---';
+    if (container) container.classList.remove('hidden');
+    if (noticeBox) noticeBox.classList.add('hidden');
+    if (commitNowBtn) commitNowBtn.classList.add('hidden');
+    if (statusBadge) {
+      statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+      statusBadge.textContent = '✓ ثبت‌شده در سیستم';
     }
+    renderOperatorFields(op);
+    // وقتی مشخصات از قبل ذخیره شده باشد، به صورت پیش‌فرض در حالت کشوئی جمع‌شده قرار می‌گیرد
+    toggleOperatorAccordion(false);
   } else {
     if (alertBox) alertBox.classList.remove('hidden');
     if (container) container.classList.add('hidden');
   }
 }
 
-function saveOperatorProfile(e) {
-  e.preventDefault();
-  let firstName = document.getElementById('modalFirstName')?.value.trim() || '';
-  let lastName = document.getElementById('modalLastName')?.value.trim() || '';
-  let fatherName = document.getElementById('modalFatherName')?.value.trim() || '';
-  let personnelId = document.getElementById('modalPersonnelId')?.value.trim() || '';
-  const supervision = document.getElementById('modalSupervision')?.value.trim() || '';
-  const unit = document.getElementById('modalUnit')?.value.trim() || '';
-  const role = document.getElementById('modalRole')?.value.trim() || '';
-
-  // اگر شماره پرسنلی وارد شده اما فیلدهای نام، نام خانوادگی یا نام پدر هنوز خالی مانده باشند، استخراج خودکار انجام شود
-  if (personnelId && (!firstName || !lastName || !fatherName)) {
-    const match = findPersonnelByCode(personnelId);
-    if (match) {
-      const parsed = parsePersonnelFullName(match.name);
-      if (!firstName) firstName = parsed.firstName;
-      if (!lastName) lastName = parsed.lastName;
-      if (!fatherName) fatherName = parsed.fatherName;
-      const fnInput = document.getElementById('modalFirstName');
-      const lnInput = document.getElementById('modalLastName');
-      const fathInput = document.getElementById('modalFatherName');
-      if (fnInput) fnInput.value = firstName;
-      if (lnInput) lnInput.value = lastName;
-      if (fathInput) fathInput.value = fatherName;
-    }
+function commitOperatorNow() {
+  if (_operatorAutoSaveTimer) {
+    clearInterval(_operatorAutoSaveTimer);
+    _operatorAutoSaveTimer = null;
   }
 
-  if (!personnelId) {
-    showToast('لطفاً شماره پرسنلی مجری را وارد نمایید', 'error');
-    document.getElementById('modalPersonnelId')?.focus();
-    return;
-  }
+  const profile = _pendingOperatorData || window.AppState.operator;
+  if (!profile) return;
 
-  if (!firstName || !lastName) {
-    showToast('لطفاً نام و نام خانوادگی را وارد نمایید (یا شماره پرسنلی صحیح وارد فرمایید تا خودکار تکمیل شود)', 'error');
-    document.getElementById('modalFirstName')?.focus();
-    return;
-  }
-
-  if (!supervision) {
-    showToast('لطفاً سرپرستی مربوطه را انتخاب فرمایید', 'error');
-    document.getElementById('modalSupervision')?.focus();
-    return;
-  }
-
-  if (!unit) {
-    showToast('لطفاً واحد خدمتی مربوطه را انتخاب فرمایید', 'error');
-    document.getElementById('modalUnit')?.focus();
-    return;
-  }
-
-  const cleanPid = toEnglishDigits(personnelId).replace(/\D/g, '') || personnelId;
-  const profile = { 
-    firstName, 
-    lastName, 
-    fatherName, 
-    personnelId: cleanPid, 
-    supervision, 
-    unit, 
-    role 
-  };
   localStorage.setItem('automation_operator_profile', JSON.stringify(profile));
   window.AppState.operator = profile;
-  updateOperatorSummaryUI();
+
+  const noticeBox = document.getElementById('operatorAutoSaveNotice');
+  const commitNowBtn = document.getElementById('commitNowBtn');
+  const statusBadge = document.getElementById('operatorStatusBadge');
+
+  if (noticeBox) noticeBox.classList.add('hidden');
+  if (commitNowBtn) commitNowBtn.classList.add('hidden');
+  if (statusBadge) {
+    statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+    statusBadge.textContent = '✓ ثبت‌شده در سیستم';
+  }
+
+  renderOperatorFields(profile);
   populateAsettDatalist();
+
   const currentAsett = document.getElementById('asettInput')?.value.trim();
-  if (currentAsett) {
+  if (currentAsett && typeof syncRebuildablesForAsett === 'function') {
     syncRebuildablesForAsett(currentAsett);
   }
-  closeModal('personnelModal');
-  showToast(`مشخصات مجری (${firstName} ${lastName}${fatherName ? ` فرزند ${fatherName}` : ''}) با موفقیت ثبت شد`, 'success');
+
+  // پس از ذخیره خودکار، جزئیات مشخصات مجری به صورت کشوئی مخفی می‌شود
+  toggleOperatorAccordion(false);
+
+  showToast(`✓ مشخصات مجری (${profile.name || profile.firstName}) ذخیره شد و بخش مشخصات کشوئی جمع گردید.`, 'success');
 }
+window.commitOperatorNow = commitOperatorNow;
+
+function applyMatchedPersonnelToHome(match) {
+  _pendingOperatorData = {
+    firstName: match.firstName || '',
+    lastName: match.lastName || '',
+    name: match.name || `${match.firstName || ''} ${match.lastName || ''}`.trim(),
+    personnelId: toEnglishDigits(String(match.code || '')).replace(/\D/g, ''),
+    nationalId: toEnglishDigits(String(match.nationalId || '')).replace(/\D/g, ''),
+    management: match.management || 'مدیریت اتوماسیون و ارتباطات',
+    supervision: match.supervision || '',
+    unit: match.serviceUnit || '',
+    serviceUnit: match.serviceUnit || '',
+    role: match.jobTitle || '',
+    jobTitle: match.jobTitle || '',
+    mobile: match.mobile ? ('0' + String(match.mobile).replace(/^0+/, '')) : ''
+  };
+
+  // اسکرول نرم به سمت کارت مجری در صفحه اصلی
+  const mainCard = document.getElementById('operatorMainCard');
+  if (mainCard) {
+    mainCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    mainCard.classList.add('ring-2', 'ring-amber-400');
+    setTimeout(() => mainCard.classList.remove('ring-2', 'ring-amber-400'), 2500);
+  }
+
+  // نمایش مشخصات در صفحه اصلی و باز کردن کشو در طول ۱۰ ثانیه بررسی
+  renderOperatorFields(_pendingOperatorData);
+  toggleOperatorAccordion(true);
+
+  const alertBox = document.getElementById('operatorMissingAlert');
+  const container = document.getElementById('operatorSummaryContainer');
+  if (alertBox) alertBox.classList.add('hidden');
+  if (container) container.classList.remove('hidden');
+
+  // نمایش پیام شمارش معکوس ۱۰ ثانیه‌ای جهت ذخیره خودکار
+  const noticeBox = document.getElementById('operatorAutoSaveNotice');
+  const countdownText = document.getElementById('operatorAutoSaveCountdownText');
+  const countdownNumber = document.getElementById('operatorCountdownNumber');
+  const commitNowBtn = document.getElementById('commitNowBtn');
+  const statusBadge = document.getElementById('operatorStatusBadge');
+
+  if (noticeBox) noticeBox.classList.remove('hidden');
+  if (commitNowBtn) commitNowBtn.classList.remove('hidden');
+  if (statusBadge) {
+    statusBadge.className = 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30';
+    statusBadge.textContent = 'در حال ذخیره خودکار...';
+  }
+
+  let timeLeft = 10;
+  if (countdownNumber) countdownNumber.textContent = `${timeLeft}s`;
+  if (countdownText) countdownText.textContent = `مشخصات با دیتابیس تطابق دارد. ذخیره خودکار در سیستم تا ۱۰ ثانیه دیگر...`;
+
+  if (_operatorAutoSaveTimer) clearInterval(_operatorAutoSaveTimer);
+
+  _operatorAutoSaveTimer = setInterval(() => {
+    timeLeft--;
+    if (countdownNumber) countdownNumber.textContent = `${timeLeft}s`;
+    if (countdownText) countdownText.textContent = `مشخصات با دیتابیس تطابق دارد. ذخیره خودکار در سیستم تا ${timeLeft} ثانیه دیگر...`;
+
+    if (timeLeft <= 0) {
+      clearInterval(_operatorAutoSaveTimer);
+      _operatorAutoSaveTimer = null;
+      commitOperatorNow();
+    }
+  }, 1000);
+
+  showToast(`مشخصات (${_pendingOperatorData.name}) در صفحه اصلی بارگذاری شد. ذخیره خودکار تا ۱۰ ثانیه دیگر...`, 'info');
+}
+window.applyMatchedPersonnelToHome = applyMatchedPersonnelToHome;
+
+
 
 // ==========================================
 // ۴. منطق فیلدهای شرطی نوار کشویی (Select) و افزودن فعالیت (دکمه ADD)
@@ -752,18 +864,87 @@ function addSelectedActivity() {
     rebuildableDesc = (selEl.options[selEl.selectedIndex]?.getAttribute('data-desc') || '').trim();
   }
 
+  // دریافت زمان اختصاصی مشخص‌شده پیش از افزودن (دستی یا کرنومتر زنده)
+  if (window.PendingStopwatchState && window.PendingStopwatchState.isRunning) {
+    togglePendingActivityStopwatch();
+  }
+
+  let actHours = 0;
+  let actMinutes = 0;
+  let actSeconds = 0;
+  let actTotalSec = 0;
+  let actMethod = '';
+
+  const pendingElapsedSec = Math.round((window.PendingStopwatchState?.elapsedTime || 0) / 1000);
+  const manualH = parseInt(toEnglishDigits(document.getElementById('actHoursInput')?.value || ''), 10) || 0;
+  const manualM = parseInt(toEnglishDigits(document.getElementById('actMinutesInput')?.value || ''), 10) || 0;
+  const manualTotalSec = (manualH * 3600) + (manualM * 60);
+
+  const mainH = parseInt(toEnglishDigits(document.getElementById('durationHoursInput')?.value || ''), 10) || 0;
+  const mainM = parseInt(toEnglishDigits(document.getElementById('durationMinutesInput')?.value || ''), 10) || 0;
+  const mainS = parseInt(toEnglishDigits(document.getElementById('durationSecondsInput')?.value || ''), 10) || 0;
+  const mainTotalSec = (mainH * 3600) + (mainM * 60) + mainS;
+  const generalSwSec = window.StopwatchState && window.StopwatchState.elapsedTime > 0 ? Math.round(window.StopwatchState.elapsedTime / 1000) : 0;
+
+  // اولویت اول با کرنومتر پیش‌فرض، دوم ورود دستی پیش‌فرض، سوم کرنومتر عمومی، چهارم فیلد مدت زمان کل فرم
+  if (pendingElapsedSec > 0) {
+    actTotalSec = pendingElapsedSec;
+    actHours = Math.floor(actTotalSec / 3600);
+    actMinutes = Math.floor((actTotalSec % 3600) / 60);
+    actSeconds = actTotalSec % 60;
+    actMethod = 'کرنومتر';
+  } else if (manualTotalSec > 0) {
+    actTotalSec = manualTotalSec;
+    actHours = manualH;
+    actMinutes = manualM;
+    actSeconds = 0;
+    actMethod = 'دستی';
+  } else if (generalSwSec > 0) {
+    actTotalSec = generalSwSec;
+    actHours = Math.floor(actTotalSec / 3600);
+    actMinutes = Math.floor((actTotalSec % 3600) / 60);
+    actSeconds = actTotalSec % 60;
+    actMethod = 'کرنومتر';
+  } else if (mainTotalSec > 0) {
+    actTotalSec = mainTotalSec;
+    actHours = mainH;
+    actMinutes = mainM;
+    actSeconds = mainS;
+    actMethod = 'دستی';
+  }
+
+  let actFormatted = '';
+  let actDigital = '';
+  if (actTotalSec > 0) {
+    const parts = [];
+    if (actHours > 0) parts.push(`${actHours} ساعت`);
+    if (actMinutes > 0) parts.push(`${actMinutes} دقیقه`);
+    if (actSeconds > 0) parts.push(`${actSeconds} ثانیه`);
+    actFormatted = parts.join(' و ') || (actSeconds > 0 ? `${actSeconds} ثانیه` : `${actMinutes} دقیقه`);
+    actDigital = actHours > 0 
+      ? `${String(actHours).padStart(2, '0')}:${String(actMinutes).padStart(2, '0')}`
+      : `00:${String(actMinutes).padStart(2, '0')}`;
+  }
+
   const activityItem = {
     id: Date.now() + Math.random().toString(36).substring(2, 6),
     type: val,
     rebuildable: rebuildableVal,
     rebuildableDesc: rebuildableDesc,
     asett: document.getElementById('asettInput')?.value.trim() || '',
-    conditionalFields
+    conditionalFields,
+    durationHours: actHours,
+    durationMinutes: actMinutes,
+    durationSeconds: actSeconds,
+    durationTotalSeconds: actTotalSec,
+    durationFormatted: actFormatted,
+    durationDigital: actDigital,
+    durationMethod: actTotalSec > 0 ? actMethod : ''
   };
 
   window.AppState.addedActivities.push(activityItem);
 
-  // پاکسازی ورودی‌های فیلدهای شرطی برای فعالیت بعدی
+  // پاکسازی ورودی‌های فیلدهای شرطی و زمان موقت فعالیت
   if (select) select.value = '';
   const customInput = document.getElementById('customActivityInput');
   if (customInput) customInput.value = '';
@@ -776,7 +957,20 @@ function addSelectedActivity() {
   const footageInput = document.getElementById('footageInput');
   if (footageInput) footageInput.value = '';
 
+  resetPendingActivityStopwatch();
+  switchPendingTimeTab('manual');
+
+  // همچنین پاکسازی فیلدهای مدت زمان اصلی فرم اگر مقداری داشتند
+  const mainHr = document.getElementById('durationHoursInput');
+  const mainMin = document.getElementById('durationMinutesInput');
+  const mainSec = document.getElementById('durationSecondsInput');
+  if (mainHr) mainHr.value = '';
+  if (mainMin) mainMin.value = '';
+  if (mainSec) mainSec.value = '';
+  if (typeof updateDurationFormattedDisplay === 'function') updateDurationFormattedDisplay();
+
   handleActivityChange();
+  recalculateTotalActivitiesDuration();
   renderAddedActivitiesList();
   showToast(`فعالیت «${val}» برای قطعه «${rebuildableVal}» با موفقیت افزوده شد.`, 'success');
 }
@@ -784,6 +978,7 @@ function addSelectedActivity() {
 function removeAddedActivity(id) {
   if (!window.AppState.addedActivities) return;
   window.AppState.addedActivities = window.AppState.addedActivities.filter((a) => a.id !== id);
+  recalculateTotalActivitiesDuration();
   renderAddedActivitiesList();
   showToast('فعالیت مورد نظر حذف شد', 'info');
 }
@@ -805,6 +1000,8 @@ function renderAddedActivitiesList() {
         فعالیتی به این گراف اضافه نشده است. پس از انتخاب اقدام از نوار بالا، دکمه <strong class="text-amber-400 font-bold">«افزودن فعالیت (ADD)»</strong> را بزنید.
       </div>
     `;
+    const banner = document.getElementById('activitiesDurationSummaryNote');
+    if (banner) banner.classList.add('hidden');
     return;
   }
 
@@ -827,34 +1024,868 @@ function renderAddedActivitiesList() {
     }
 
     const itemEl = document.createElement('div');
-    itemEl.className = 'flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950/90 border border-slate-700/90 shadow-sm hover:border-slate-600 transition';
+    itemEl.className = 'p-3 rounded-2xl bg-slate-950/90 border border-slate-700/80 shadow-md space-y-2.5 transition hover:border-slate-600';
     const rebuildableText = act.rebuildableDesc
       ? `${act.rebuildable} - ${act.rebuildableDesc}`
       : act.rebuildable;
     const rebuildableBadge = act.rebuildable
-      ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-500/50 text-[11px] font-bold text-cyan-300">
-          <svg class="w-3 h-3 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
-          <span>قطعه: ${escapeHtml(rebuildableText)}</span>
+      ? `<span class="inline-flex max-w-full break-words whitespace-normal text-right items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/80 border border-cyan-500/50 text-[11px] font-bold text-cyan-300">
+          <svg class="w-3 h-3 text-cyan-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+          <span class="break-words">قطعه Rebuildble: ${escapeHtml(rebuildableText)}</span>
         </span>`
       : '';
 
+    const hasTime = (act.durationTotalSeconds && act.durationTotalSeconds > 0);
+    const timeDisplayHtml = hasTime
+      ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 shadow-sm">
+          <svg class="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>${escapeHtml(act.durationFormatted || act.durationDigital)}</span>
+          <span class="text-[10px] text-emerald-400/80 font-sans font-normal border-r border-emerald-500/40 pr-1.5 mr-0.5">(${escapeHtml(act.durationMethod || 'دستی')})</span>
+        </span>`
+      : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-900 text-slate-400 border border-slate-800">
+          <span>زمان ثبت نشده</span>
+        </span>`;
+
     itemEl.innerHTML = `
-      <div class="flex items-center gap-2.5 overflow-hidden">
-        <span class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-amber-500/30">
-          ${index + 1}
-        </span>
-        <div class="flex flex-wrap items-center gap-1.5 overflow-hidden">
-          <span class="text-xs sm:text-sm font-bold text-slate-100">${escapeHtml(act.type)}</span>
-          ${rebuildableBadge}
-          ${detailPills}
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex items-start gap-2.5 min-w-0 flex-1 overflow-hidden">
+          <span class="w-6 h-6 rounded-lg bg-amber-500/20 text-amber-400 font-mono font-bold text-xs flex items-center justify-center shrink-0 border border-amber-500/30 mt-0.5">
+            ${index + 1}
+          </span>
+          <div class="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+            <span class="text-xs sm:text-sm font-bold text-slate-100">${escapeHtml(act.type)}</span>
+            ${rebuildableBadge}
+            ${detailPills}
+            ${hasTime ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-xs font-mono font-black bg-emerald-500/20 text-emerald-300 border border-emerald-500/60 shadow-xs">⏱️ زمان: ${escapeHtml(act.durationFormatted || act.durationDigital)} <span class="text-[10px] text-emerald-400 font-sans font-normal">(${escapeHtml(act.durationMethod)})</span></span>` : ''}
+          </div>
+        </div>
+        <button type="button" onclick="removeAddedActivity('${act.id}')" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition shrink-0 cursor-pointer" title="حذف این فعالیت">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </div>
+
+      <!-- سطر ثبت و تنظیم زمان اختصاصی این فعالیت (دستی و جداگانه) -->
+      <div class="pt-2 border-t border-slate-800/80 bg-slate-900/60 -mx-3 -mb-3 p-3 rounded-b-2xl space-y-2.5">
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-[11px] font-bold text-slate-300 flex items-center gap-1">
+              <svg class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>مدت این فعالیت:</span>
+            </span>
+            <div id="actCardBadge_${act.id}">${timeDisplayHtml}</div>
+          </div>
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button type="button" onclick="startStopwatchForActivity('${act.id}')" class="px-2.5 py-1 bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-500 hover:to-teal-600 active:scale-95 text-white rounded-lg text-[11px] font-black transition cursor-pointer flex items-center gap-1.5 shadow-sm" title="کرنومتر اختصاصی زنده این فعالیت">
+              <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>⏱️ کرنومتر این فعالیت</span>
+            </button>
+            <button type="button" onclick="openActivityTimeModal('${act.id}', 'manual')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-[11px] font-bold transition cursor-pointer flex items-center gap-1" title="تنظیم پیشرفته زمان فعالیت">
+              <span>تنظیم زمان ⚙️</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- فیلدهای ورودی مستقیم دستی (ساعت و دقیقه) برای هر فعالیت به صورت مستقل و جداگانه -->
+        <div class="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-slate-950/80 p-2 rounded-xl border border-slate-800">
+          <div class="flex items-center gap-1.5 flex-1 min-w-[170px]" dir="ltr">
+            <!-- ساعت -->
+            <div class="relative flex-1">
+              <input type="number" id="actCardHr_${act.id}" value="${act.durationHours > 0 ? act.durationHours : ''}" min="0" max="999" placeholder="0" onchange="updateActivityTimeDirect('${act.id}', false)" class="w-full bg-slate-900 border border-slate-700 hover:border-cyan-500 focus:border-cyan-500 rounded-lg px-2 py-1.5 text-xs font-mono text-center text-cyan-300 outline-none">
+              <span class="absolute left-1.5 top-1.5 text-[8px] text-slate-500 font-bold pointer-events-none">HR</span>
+            </div>
+            <span class="text-slate-500 font-bold text-xs select-none">:</span>
+            <!-- دقیقه -->
+            <div class="relative flex-1">
+              <input type="number" id="actCardMin_${act.id}" value="${(act.durationMinutes !== undefined && act.durationMinutes !== null && act.durationTotalSeconds > 0) ? act.durationMinutes : ''}" min="0" max="59" placeholder="0" onchange="updateActivityTimeDirect('${act.id}', false)" class="w-full bg-slate-900 border border-slate-700 hover:border-cyan-500 focus:border-cyan-500 rounded-lg px-2 py-1.5 text-xs font-mono text-center text-cyan-300 outline-none">
+              <span class="absolute left-1.5 top-1.5 text-[8px] text-slate-500 font-bold pointer-events-none">MIN</span>
+            </div>
+            <span class="text-[10px] text-slate-400 font-sans" dir="rtl">ساعت و دقیقه</span>
+          </div>
+
+          <!-- دکمه‌های سریع زمان و دکمه ثبت دستی -->
+          <div class="flex items-center gap-1 flex-wrap shrink-0">
+            <button type="button" onclick="setActivityQuickTimeDirect('${act.id}', 0, 15)" class="px-1.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-md text-[10px] font-mono cursor-pointer transition">۱۵د</button>
+            <button type="button" onclick="setActivityQuickTimeDirect('${act.id}', 0, 30)" class="px-1.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-md text-[10px] font-mono cursor-pointer transition">۳۰د</button>
+            <button type="button" onclick="setActivityQuickTimeDirect('${act.id}', 1, 0)" class="px-1.5 py-1 bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-md text-[10px] font-mono cursor-pointer transition">۱س</button>
+            <button type="button" onclick="updateActivityTimeDirect('${act.id}', true)" class="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold rounded-lg text-xs flex items-center gap-1 shadow transition cursor-pointer" title="ثبت دستی زمان برای این فعالیت">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              <span>ثبت دستی</span>
+            </button>
+            ${hasTime ? `
+            <button type="button" onclick="clearActivityTimeDirect('${act.id}')" class="p-1 bg-slate-800 hover:bg-red-950 text-slate-400 hover:text-red-300 border border-slate-700 rounded-lg text-xs transition cursor-pointer" title="پاکسازی زمان این فعالیت">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7"/></svg>
+            </button>
+            ` : ''}
+          </div>
         </div>
       </div>
-      <button type="button" onclick="removeAddedActivity('${act.id}')" class="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-950/40 rounded-lg transition shrink-0" title="حذف این فعالیت">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-      </button>
     `;
     container.appendChild(itemEl);
   });
+}
+
+// ==========================================
+// توابع مدیریت زمان اختصاصی تفکیک‌شده برای هر فعالیت
+// ==========================================
+// ==========================================
+// ماژول زمان اختصاصی برای ثبت فعالیت (ورود دستی و کرنومتر زنده پیش از افزودن)
+// ==========================================
+window.PendingStopwatchState = {
+  isRunning: false,
+  startTime: 0,
+  elapsedTime: 0, // بر حسب میلی‌ثانیه
+  timerInterval: null,
+  activeTab: 'manual' // 'manual' یا 'stopwatch'
+};
+
+function switchPendingTimeTab(tab) {
+  window.PendingStopwatchState.activeTab = tab;
+  const manualBtn = document.getElementById('pendingTabManualBtn');
+  const swBtn = document.getElementById('pendingTabStopwatchBtn');
+  const manualSec = document.getElementById('pendingManualSection');
+  const swSec = document.getElementById('pendingStopwatchSection');
+
+  if (tab === 'stopwatch') {
+    if (manualBtn) {
+      manualBtn.className = 'px-2.5 py-1 rounded-md font-bold transition text-slate-400 hover:text-slate-200 cursor-pointer';
+    }
+    if (swBtn) {
+      swBtn.className = 'px-2.5 py-1 rounded-md font-bold transition text-slate-950 bg-amber-400 shadow cursor-pointer';
+    }
+    if (manualSec) manualSec.classList.add('hidden');
+    if (swSec) swSec.classList.remove('hidden');
+
+    // اگر زمان کرنومتر صفر است اما دستی وارد شده بود، همگام شود
+    if (window.PendingStopwatchState.elapsedTime === 0 && !window.PendingStopwatchState.isRunning) {
+      const h = parseInt(toEnglishDigits(document.getElementById('actHoursInput')?.value || ''), 10) || 0;
+      const m = parseInt(toEnglishDigits(document.getElementById('actMinutesInput')?.value || ''), 10) || 0;
+      const sec = (h * 3600) + (m * 60);
+      if (sec > 0) {
+        window.PendingStopwatchState.elapsedTime = sec * 1000;
+        updatePendingStopwatchDisplay();
+      }
+    }
+  } else {
+    if (manualBtn) {
+      manualBtn.className = 'px-2.5 py-1 rounded-md font-bold transition text-slate-950 bg-amber-400 shadow cursor-pointer';
+    }
+    if (swBtn) {
+      swBtn.className = 'px-2.5 py-1 rounded-md font-bold transition text-slate-400 hover:text-slate-200 cursor-pointer';
+    }
+    if (manualSec) manualSec.classList.remove('hidden');
+    if (swSec) swSec.classList.add('hidden');
+
+    if (window.PendingStopwatchState.elapsedTime > 0) {
+      const totalSec = Math.round(window.PendingStopwatchState.elapsedTime / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      const hrEl = document.getElementById('actHoursInput');
+      const minEl = document.getElementById('actMinutesInput');
+      const secEl = document.getElementById('actSecondsInput');
+      if (hrEl) hrEl.value = h > 0 ? h : '';
+      if (minEl) minEl.value = m;
+      if (secEl) secEl.value = s;
+    }
+  }
+}
+
+function updatePendingStopwatchDisplay() {
+  const totalMs = Math.max(0, window.PendingStopwatchState.elapsedTime || 0);
+  const totalSeconds = Math.floor(totalMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const hrEl = document.getElementById('pendingSwHours');
+  const minEl = document.getElementById('pendingSwMinutes');
+  const secEl = document.getElementById('pendingSwSeconds');
+  if (hrEl) hrEl.textContent = formatTwoDigits(hours);
+  if (minEl) minEl.textContent = formatTwoDigits(minutes);
+  if (secEl) secEl.textContent = formatTwoDigits(seconds);
+
+  const isRunning = window.PendingStopwatchState.isRunning;
+  const startBtn = document.getElementById('pendingSwStartPauseBtn');
+  const startText = document.getElementById('pendingSwStartText');
+  const startIcon = document.getElementById('pendingSwStartIcon');
+  const dotEl = document.getElementById('pendingSwStatusDot');
+  const statusEl = document.getElementById('pendingSwStatusText');
+
+  if (isRunning) {
+    if (startBtn) {
+      startBtn.className = 'py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition cursor-pointer';
+    }
+    if (startText) startText.textContent = 'توقف کرنومتر (مکث)';
+    if (startIcon) {
+      startIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+    }
+    if (dotEl) dotEl.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+    if (statusEl) statusEl.textContent = 'کرنومتر در حال اندازه‌گیری زمان این فعالیت...';
+  } else {
+    if (startBtn) {
+      startBtn.className = 'py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition cursor-pointer';
+    }
+    if (startText) startText.textContent = totalSeconds > 0 ? 'ادامه کرنومتر' : 'شروع کرنومتر';
+    if (startIcon) {
+      startIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+    }
+    if (dotEl) dotEl.className = totalSeconds > 0 ? 'w-2 h-2 rounded-full bg-amber-400' : 'w-2 h-2 rounded-full bg-slate-500';
+    if (statusEl) statusEl.textContent = totalSeconds > 0 ? 'کرنومتر متوقف است (آماده افزودن فعالیت)' : 'آماده شروع تایمر این فعالیت';
+  }
+}
+
+function togglePendingActivityStopwatch() {
+  if (window.PendingStopwatchState.isRunning) {
+    window.PendingStopwatchState.isRunning = false;
+    if (window.PendingStopwatchState.timerInterval) {
+      clearInterval(window.PendingStopwatchState.timerInterval);
+      window.PendingStopwatchState.timerInterval = null;
+    }
+    if (window.PendingStopwatchState.startTime > 0) {
+      window.PendingStopwatchState.elapsedTime = Math.max(0, Date.now() - window.PendingStopwatchState.startTime);
+    }
+    // همگام‌سازی فیلدهای دستی
+    const totalSec = Math.round(window.PendingStopwatchState.elapsedTime / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const hrEl = document.getElementById('actHoursInput');
+    const minEl = document.getElementById('actMinutesInput');
+    const secEl = document.getElementById('actSecondsInput');
+    if (hrEl) hrEl.value = h > 0 ? h : '';
+    if (minEl) minEl.value = m;
+    if (secEl) secEl.value = s;
+  } else {
+    window.PendingStopwatchState.isRunning = true;
+    window.PendingStopwatchState.startTime = Date.now() - (window.PendingStopwatchState.elapsedTime || 0);
+    if (window.PendingStopwatchState.timerInterval) {
+      clearInterval(window.PendingStopwatchState.timerInterval);
+    }
+    window.PendingStopwatchState.timerInterval = setInterval(() => {
+      window.PendingStopwatchState.elapsedTime = Math.max(0, Date.now() - window.PendingStopwatchState.startTime);
+      updatePendingStopwatchDisplay();
+    }, 200);
+  }
+  updatePendingStopwatchDisplay();
+}
+
+function resetPendingActivityStopwatch() {
+  if (window.PendingStopwatchState.isRunning) {
+    window.PendingStopwatchState.isRunning = false;
+    if (window.PendingStopwatchState.timerInterval) {
+      clearInterval(window.PendingStopwatchState.timerInterval);
+      window.PendingStopwatchState.timerInterval = null;
+    }
+  }
+  window.PendingStopwatchState.elapsedTime = 0;
+  window.PendingStopwatchState.startTime = 0;
+  updatePendingStopwatchDisplay();
+
+  const hrEl = document.getElementById('actHoursInput');
+  const minEl = document.getElementById('actMinutesInput');
+  const secEl = document.getElementById('actSecondsInput');
+  if (hrEl) hrEl.value = '';
+  if (minEl) minEl.value = '';
+  if (secEl) secEl.value = 0;
+}
+
+function setPendingActQuickTime(h, m) {
+  const hrEl = document.getElementById('actHoursInput');
+  const minEl = document.getElementById('actMinutesInput');
+  const secEl = document.getElementById('actSecondsInput');
+  if (hrEl) hrEl.value = h > 0 ? h : '';
+  if (minEl) minEl.value = m;
+  if (secEl) secEl.value = 0;
+
+  const sec = (h * 3600) + (m * 60);
+  if (window.PendingStopwatchState) {
+    window.PendingStopwatchState.elapsedTime = sec * 1000;
+    updatePendingStopwatchDisplay();
+  }
+}
+
+function saveManualPendingTime() {
+  const hrEl = document.getElementById('actHoursInput');
+  const minEl = document.getElementById('actMinutesInput');
+  const h = parseInt(toEnglishDigits(hrEl?.value || ''), 10) || 0;
+  const m = parseInt(toEnglishDigits(minEl?.value || ''), 10) || 0;
+  const totalSec = (h * 3600) + (m * 60);
+  if (totalSec <= 0) {
+    showToast('لطفاً ساعت یا دقیقه معتبر وارد نمایید.', 'warning');
+    return;
+  }
+  window.PendingStopwatchState.elapsedTime = totalSec * 1000;
+  window.PendingStopwatchState.activeTab = 'manual';
+  showToast(`✓ زمان دستی (${h > 0 ? h + ' ساعت و ' : ''}${m} دقیقه) ثبت شد. هنگام افزودن فعالیت اعمال می‌گردد.`, 'success');
+}
+
+function saveStopwatchPendingTime() {
+  const state = window.PendingStopwatchState;
+  if (state.isRunning) {
+    togglePendingActivityStopwatch();
+  }
+  const totalSec = Math.round((state.elapsedTime || 0) / 1000);
+  if (totalSec <= 0) {
+    showToast('کرنومتر هنوز زمانی را ثبت نکرده است.', 'warning');
+    return;
+  }
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const hrEl = document.getElementById('actHoursInput');
+  const minEl = document.getElementById('actMinutesInput');
+  if (hrEl) hrEl.value = h > 0 ? h : '';
+  if (minEl) minEl.value = m;
+  showToast(`✓ زمان کرنومتر (${h > 0 ? h + ' ساعت و ' : ''}${m} دقیقه) ثبت شد. هنگام افزودن فعالیت اعمال می‌گردد.`, 'success');
+}
+
+/**
+ * ثبت دستی مستقیم زمان برای یک فعالیت مشخص شده در لیست
+ */
+function updateActivityTimeDirect(actId, showNotification = true) {
+  const activities = window.AppState.addedActivities || [];
+  const act = activities.find(a => a.id === actId);
+  if (!act) return;
+
+  const hrEl = document.getElementById(`actCardHr_${actId}`);
+  const minEl = document.getElementById(`actCardMin_${actId}`);
+  const h = parseInt(toEnglishDigits(hrEl?.value || ''), 10) || 0;
+  const m = parseInt(toEnglishDigits(minEl?.value || ''), 10) || 0;
+  const s = 0;
+  const totalSec = (h * 3600) + (m * 60) + s;
+
+  let formatted = '';
+  let digital = '';
+  if (totalSec > 0) {
+    const parts = [];
+    if (h > 0) parts.push(`${h} ساعت`);
+    if (m > 0) parts.push(`${m} دقیقه`);
+    formatted = parts.join(' و ') || `${m} دقیقه`;
+    digital = h > 0 
+      ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      : `00:${String(m).padStart(2, '0')}`;
+  }
+
+  act.durationHours = h;
+  act.durationMinutes = m;
+  act.durationSeconds = s;
+  act.durationTotalSeconds = totalSec;
+  act.durationFormatted = formatted;
+  act.durationDigital = digital;
+  act.durationMethod = totalSec > 0 ? 'دستی' : '';
+
+  recalculateTotalActivitiesDuration();
+  renderAddedActivitiesList();
+  if (showNotification) {
+    showToast(totalSec > 0 
+      ? `زمان «${formatted}» برای فعالیت «${act.type}» با موفقیت ثبت شد.`
+      : `زمان فعالیت «${act.type}» پاکسازی شد.`, 
+      totalSec > 0 ? 'success' : 'info'
+    );
+  }
+}
+
+/**
+ * ثبت سریع زمان‌های آماده (Preset) برای یک فعالیت خاص
+ */
+function setActivityQuickTimeDirect(actId, h, m) {
+  const activities = window.AppState.addedActivities || [];
+  const act = activities.find(a => a.id === actId);
+  if (!act) return;
+
+  const totalSec = (h * 3600) + (m * 60);
+  const parts = [];
+  if (h > 0) parts.push(`${h} ساعت`);
+  if (m > 0) parts.push(`${m} دقیقه`);
+  const formatted = parts.join(' و ') || `${m} دقیقه`;
+  const digital = h > 0 
+    ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    : `00:${String(m).padStart(2, '0')}`;
+
+  act.durationHours = h;
+  act.durationMinutes = m;
+  act.durationSeconds = 0;
+  act.durationTotalSeconds = totalSec;
+  act.durationFormatted = formatted;
+  act.durationDigital = digital;
+  act.durationMethod = 'دستی';
+
+  recalculateTotalActivitiesDuration();
+  renderAddedActivitiesList();
+  showToast(`زمان «${formatted}» برای فعالیت «${act.type}» ثبت شد.`, 'success');
+}
+
+/**
+ * اعمال زمان جاری کرنومتر به یک فعالیت خاص در لیست
+ */
+function applyStopwatchToActivity(actId) {
+  const activities = window.AppState.addedActivities || [];
+  const act = activities.find(a => a.id === actId);
+  if (!act) {
+    showToast('فعالیت مورد نظر یافت نشد', 'error');
+    return;
+  }
+  let sec = 0;
+  if (window.StopwatchState && window.StopwatchState.elapsedTime > 0) {
+    sec = Math.round(window.StopwatchState.elapsedTime / 1000);
+  } else {
+    const h = parseInt(toEnglishDigits(document.getElementById('durationHoursInput')?.value || ''), 10) || 0;
+    const m = parseInt(toEnglishDigits(document.getElementById('durationMinutesInput')?.value || ''), 10) || 0;
+    const s = parseInt(toEnglishDigits(document.getElementById('durationSecondsInput')?.value || ''), 10) || 0;
+    sec = (h * 3600) + (m * 60) + s;
+  }
+  if (sec <= 0) {
+    showToast('زمان کرنومتر یا فرم خالی است. ابتدا کرنومتر را به راه اندازید یا زمان را دستی درج نمایید.', 'warning');
+    return;
+  }
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  const totalSec = (h * 3600) + (m * 60) + s;
+
+  const parts = [];
+  if (h > 0) parts.push(`${h} ساعت`);
+  if (m > 0) parts.push(`${m} دقیقه`);
+  if (s > 0) parts.push(`${s} ثانیه`);
+  const formatted = parts.join(' و ') || (s > 0 ? `${s} ثانیه` : `${m} دقیقه`);
+  const digital = h > 0 
+    ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+    : `00:${String(m).padStart(2, '0')}`;
+
+  act.durationHours = h;
+  act.durationMinutes = m;
+  act.durationSeconds = s;
+  act.durationTotalSeconds = totalSec;
+  act.durationFormatted = formatted;
+  act.durationDigital = digital;
+  act.durationMethod = (window.StopwatchState && window.StopwatchState.elapsedTime > 0) ? 'کرنومتر' : 'دستی';
+
+  recalculateTotalActivitiesDuration();
+  renderAddedActivitiesList();
+  showToast(`زمان «${formatted}» با موفقیت برای فعالیت «${act.type}» ثبت شد.`, 'success');
+}
+
+/**
+ * شروع یا ادامه کرنومتر زنده اختصاصی برای یک فعالیت معین
+ */
+function startStopwatchForActivity(actId) {
+  openActivityTimeModal(actId, 'stopwatch');
+}
+
+/**
+ * پاکسازی زمان یک فعالیت معین
+ */
+function clearActivityTimeDirect(actId) {
+  const activities = window.AppState.addedActivities || [];
+  const act = activities.find(a => a.id === actId);
+  if (!act) return;
+
+  act.durationHours = 0;
+  act.durationMinutes = 0;
+  act.durationSeconds = 0;
+  act.durationTotalSeconds = 0;
+  act.durationFormatted = '';
+  act.durationDigital = '';
+  act.durationMethod = '';
+
+  if (window.ActModalStopwatchState && window.ActModalStopwatchState.targetActivityId === actId) {
+    resetActivityModalStopwatch();
+  }
+
+  recalculateTotalActivitiesDuration();
+  renderAddedActivitiesList();
+  showToast(`زمان فعالیت «${act.type}» با موفقیت پاکسازی شد.`, 'info');
+}
+
+function recalculateTotalActivitiesDuration() {
+  const activities = window.AppState.addedActivities || [];
+  let totalSec = 0;
+  let hasAnyTime = false;
+  let countWithTime = 0;
+
+  activities.forEach(a => {
+    if (a.durationTotalSeconds && a.durationTotalSeconds > 0) {
+      totalSec += a.durationTotalSeconds;
+      hasAnyTime = true;
+      countWithTime++;
+    }
+  });
+
+  const banner = document.getElementById('activitiesDurationSummaryNote');
+  const bannerVal = document.getElementById('activitiesDurationSummaryValue');
+
+  if (hasAnyTime && totalSec > 0) {
+    const totH = Math.floor(totalSec / 3600);
+    const totM = Math.floor((totalSec % 3600) / 60);
+    const totS = totalSec % 60;
+
+    const parts = [];
+    if (totH > 0) parts.push(`${totH} ساعت`);
+    if (totM > 0) parts.push(`${totM} دقیقه`);
+    if (totS > 0) parts.push(`${totS} ثانیه`);
+    const formatted = parts.join(' و ') || `${totM} دقیقه`;
+
+    if (banner && bannerVal) {
+      bannerVal.textContent = `${formatted} (مجموع ${countWithTime} فعالیت)`;
+      banner.classList.remove('hidden');
+    }
+
+    // بروزرسانی خودکار ورودی‌های کارت اصلی مدت زمان گراف
+    const hrEl = document.getElementById('durationHoursInput');
+    const minEl = document.getElementById('durationMinutesInput');
+    const secEl = document.getElementById('durationSecondsInput');
+    if (hrEl) hrEl.value = totH > 0 ? totH : '';
+    if (minEl) minEl.value = totM;
+    if (secEl) secEl.value = totS;
+    updateDurationFormattedDisplay();
+  } else {
+    if (banner) banner.classList.add('hidden');
+  }
+}
+
+// ==========================================
+// وضعیت و منطق کرنومتر اختصاصی مودال فعالیت
+// ==========================================
+window.ActModalStopwatchState = {
+  isRunning: false,
+  startTime: 0,
+  elapsedTime: 0, // بر حسب میلی‌ثانیه
+  timerInterval: null,
+  targetActivityId: null,
+  activeTab: 'manual' // 'manual' یا 'stopwatch'
+};
+
+function switchModalTimeTab(tab) {
+  window.ActModalStopwatchState.activeTab = tab;
+  const manualBtn = document.getElementById('modalTabManualBtn');
+  const swBtn = document.getElementById('modalTabStopwatchBtn');
+  const manualSec = document.getElementById('modalManualSection');
+  const swSec = document.getElementById('modalStopwatchSection');
+
+  if (tab === 'stopwatch') {
+    if (manualBtn) {
+      manualBtn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-400 hover:text-slate-200 cursor-pointer';
+    }
+    if (swBtn) {
+      swBtn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-950 bg-amber-400 shadow cursor-pointer';
+    }
+    if (manualSec) manualSec.classList.add('hidden');
+    if (swSec) swSec.classList.remove('hidden');
+
+    // اگر کرنومتر صفر است اما کاربر قبلاً زمان دستی وارد کرده بود، زمان اولیه کرنومتر را با آن همگام کنیم
+    if ((window.ActModalStopwatchState.elapsedTime === 0) && !window.ActModalStopwatchState.isRunning) {
+      const h = parseInt(toEnglishDigits(document.getElementById('modalActHoursInput')?.value || ''), 10) || 0;
+      const m = parseInt(toEnglishDigits(document.getElementById('modalActMinutesInput')?.value || ''), 10) || 0;
+      const s = parseInt(toEnglishDigits(document.getElementById('modalActSecondsInput')?.value || ''), 10) || 0;
+      const sec = (h * 3600) + (m * 60) + s;
+      if (sec > 0) {
+        window.ActModalStopwatchState.elapsedTime = sec * 1000;
+        updateActModalStopwatchDisplay();
+      }
+    }
+  } else {
+    if (manualBtn) {
+      manualBtn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-950 bg-amber-400 shadow cursor-pointer';
+    }
+    if (swBtn) {
+      swBtn.className = 'flex-1 py-1.5 text-xs font-bold rounded-lg transition text-slate-400 hover:text-slate-200 cursor-pointer';
+    }
+    if (manualSec) manualSec.classList.remove('hidden');
+    if (swSec) swSec.classList.add('hidden');
+
+    // اگر از حالت کرنومتر برمی‌گردد و زمان کرنومتر بزرگتر از صفر است، فیلدهای دستی را همگام کنیم
+    if (window.ActModalStopwatchState.elapsedTime > 0) {
+      const totalSec = Math.round(window.ActModalStopwatchState.elapsedTime / 1000);
+      const h = Math.floor(totalSec / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      const s = totalSec % 60;
+      const hrEl = document.getElementById('modalActHoursInput');
+      const minEl = document.getElementById('modalActMinutesInput');
+      const secEl = document.getElementById('modalActSecondsInput');
+      if (hrEl) hrEl.value = h > 0 ? h : '';
+      if (minEl) minEl.value = m;
+      if (secEl) secEl.value = s;
+    }
+  }
+}
+
+function updateActModalStopwatchDisplay() {
+  const totalMs = Math.max(0, window.ActModalStopwatchState.elapsedTime || 0);
+  const totalSeconds = Math.floor(totalMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const hrEl = document.getElementById('actModalSwHours');
+  const minEl = document.getElementById('actModalSwMinutes');
+  const secEl = document.getElementById('actModalSwSeconds');
+  if (hrEl) hrEl.textContent = formatTwoDigits(hours);
+  if (minEl) minEl.textContent = formatTwoDigits(minutes);
+  if (secEl) secEl.textContent = formatTwoDigits(seconds);
+
+  const isRunning = window.ActModalStopwatchState.isRunning;
+  const startBtn = document.getElementById('actModalSwStartPauseBtn');
+  const startText = document.getElementById('actModalSwStartText');
+  const startIcon = document.getElementById('actModalSwStartIcon');
+  const dotEl = document.getElementById('actModalSwStatusDot');
+  const statusEl = document.getElementById('actModalSwStatusText');
+
+  if (isRunning) {
+    if (startBtn) {
+      startBtn.className = 'py-2.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition cursor-pointer';
+    }
+    if (startText) startText.textContent = 'توقف کرنومتر (مکث)';
+    if (startIcon) {
+      startIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+    }
+    if (dotEl) dotEl.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse';
+    if (statusEl) statusEl.textContent = 'کرنومتر در حال اندازه‌گیری زمان فعالیت...';
+  } else {
+    if (startBtn) {
+      startBtn.className = 'py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 active:scale-95 text-slate-950 font-black rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition cursor-pointer';
+    }
+    if (startText) startText.textContent = totalSeconds > 0 ? 'ادامه کرنومتر' : 'شروع کرنومتر';
+    if (startIcon) {
+      startIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>';
+    }
+    if (dotEl) dotEl.className = totalSeconds > 0 ? 'w-2 h-2 rounded-full bg-amber-400' : 'w-2 h-2 rounded-full bg-slate-500';
+    if (statusEl) statusEl.textContent = totalSeconds > 0 ? 'کرنومتر متوقف است (آماده تأیید یا ادامه)' : 'آماده شروع اندازه‌گیری زمان فعالیت';
+  }
+}
+
+function toggleActivityModalStopwatch() {
+  if (window.ActModalStopwatchState.isRunning) {
+    // توقف کرنومتر
+    window.ActModalStopwatchState.isRunning = false;
+    if (window.ActModalStopwatchState.timerInterval) {
+      clearInterval(window.ActModalStopwatchState.timerInterval);
+      window.ActModalStopwatchState.timerInterval = null;
+    }
+    if (window.ActModalStopwatchState.startTime > 0) {
+      window.ActModalStopwatchState.elapsedTime = Math.max(0, Date.now() - window.ActModalStopwatchState.startTime);
+    }
+    // همگام‌سازی فیلدهای دستی
+    const totalSec = Math.round(window.ActModalStopwatchState.elapsedTime / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    const hrEl = document.getElementById('modalActHoursInput');
+    const minEl = document.getElementById('modalActMinutesInput');
+    const secEl = document.getElementById('modalActSecondsInput');
+    if (hrEl) hrEl.value = h > 0 ? h : '';
+    if (minEl) minEl.value = m;
+    if (secEl) secEl.value = s;
+  } else {
+    // شروع کرنومتر
+    window.ActModalStopwatchState.isRunning = true;
+    window.ActModalStopwatchState.startTime = Date.now() - (window.ActModalStopwatchState.elapsedTime || 0);
+    if (window.ActModalStopwatchState.timerInterval) {
+      clearInterval(window.ActModalStopwatchState.timerInterval);
+    }
+    window.ActModalStopwatchState.timerInterval = setInterval(() => {
+      window.ActModalStopwatchState.elapsedTime = Math.max(0, Date.now() - window.ActModalStopwatchState.startTime);
+      updateActModalStopwatchDisplay();
+    }, 200);
+  }
+  updateActModalStopwatchDisplay();
+}
+
+function resetActivityModalStopwatch() {
+  if (window.ActModalStopwatchState.isRunning) {
+    window.ActModalStopwatchState.isRunning = false;
+    if (window.ActModalStopwatchState.timerInterval) {
+      clearInterval(window.ActModalStopwatchState.timerInterval);
+      window.ActModalStopwatchState.timerInterval = null;
+    }
+  }
+  window.ActModalStopwatchState.elapsedTime = 0;
+  window.ActModalStopwatchState.startTime = 0;
+  updateActModalStopwatchDisplay();
+
+  const hrEl = document.getElementById('modalActHoursInput');
+  const minEl = document.getElementById('modalActMinutesInput');
+  const secEl = document.getElementById('modalActSecondsInput');
+  if (hrEl) hrEl.value = '';
+  if (minEl) minEl.value = '';
+  if (secEl) secEl.value = 0;
+}
+
+function openActivityTimeModal(actId, defaultTab = 'manual') {
+  const activities = window.AppState.addedActivities || [];
+  const act = activities.find(a => a.id === actId);
+  if (!act) {
+    showToast('فعالیت مورد نظر یافت نشد', 'error');
+    return;
+  }
+
+  // اگر تایمر مودال قبلی در حال کار بوده باشد، متوقف شود
+  if (window.ActModalStopwatchState.isRunning) {
+    toggleActivityModalStopwatch();
+  }
+
+  window.ActModalStopwatchState.targetActivityId = actId;
+  window.ActModalStopwatchState.elapsedTime = (act.durationTotalSeconds || 0) * 1000;
+  window.ActModalStopwatchState.startTime = 0;
+  window.ActModalStopwatchState.isRunning = false;
+
+  const idInput = document.getElementById('modalTargetActivityId');
+  const titleEl = document.getElementById('modalTargetActivityTitle');
+  const subEl = document.getElementById('modalTargetActivitySub');
+  const hrEl = document.getElementById('modalActHoursInput');
+  const minEl = document.getElementById('modalActMinutesInput');
+  const secEl = document.getElementById('modalActSecondsInput');
+
+  if (idInput) idInput.value = actId;
+  if (titleEl) titleEl.textContent = `فعالیت: ${act.type}`;
+  if (subEl) subEl.textContent = `قطعه Rebuildble ID: ${act.rebuildable || 'تعیین نشده'} ${act.rebuildableDesc ? `(${act.rebuildableDesc})` : ''}`;
+
+  if (hrEl) hrEl.value = (act.durationHours && act.durationHours > 0) ? act.durationHours : '';
+  if (minEl) minEl.value = (act.durationMinutes !== undefined && act.durationMinutes !== null && act.durationTotalSeconds > 0) ? act.durationMinutes : '';
+  if (secEl) secEl.value = act.durationSeconds || 0;
+
+  updateActModalStopwatchDisplay();
+  switchModalTimeTab(defaultTab);
+  openModal('activityTimeModal');
+
+  // اگر کاربر دکمه کرنومتر را زده و زمان فعالیت صفر است، بلافاصله کرنومتر را راه بیندازیم
+  if (defaultTab === 'stopwatch' && (!act.durationTotalSeconds || act.durationTotalSeconds === 0)) {
+    toggleActivityModalStopwatch();
+  }
+}
+
+function closeActivityTimeModal() {
+  if (window.ActModalStopwatchState.isRunning) {
+    toggleActivityModalStopwatch();
+  }
+  closeModal('activityTimeModal');
+}
+
+function setModalQuickTime(h, m) {
+  const hrEl = document.getElementById('modalActHoursInput');
+  const minEl = document.getElementById('modalActMinutesInput');
+  const secEl = document.getElementById('modalActSecondsInput');
+  if (hrEl) hrEl.value = h > 0 ? h : '';
+  if (minEl) minEl.value = m;
+  if (secEl) secEl.value = 0;
+
+  // همگام‌سازی زمان کرنومتر در صورت صفر بودن
+  const sec = (h * 3600) + (m * 60);
+  window.ActModalStopwatchState.elapsedTime = sec * 1000;
+  updateActModalStopwatchDisplay();
+}
+
+function applyStopwatchTimeToModal() {
+  let sec = 0;
+  if (window.StopwatchState && window.StopwatchState.elapsedTime > 0) {
+    sec = Math.round(window.StopwatchState.elapsedTime / 1000);
+  } else {
+    const h = parseInt(toEnglishDigits(document.getElementById('durationHoursInput')?.value || ''), 10) || 0;
+    const m = parseInt(toEnglishDigits(document.getElementById('durationMinutesInput')?.value || ''), 10) || 0;
+    const s = parseInt(toEnglishDigits(document.getElementById('durationSecondsInput')?.value || ''), 10) || 0;
+    sec = (h * 3600) + (m * 60) + s;
+  }
+  if (sec <= 0) {
+    showToast('زمان کرنومتر یا فرم اصلی هنوز خالی است', 'warning');
+    return;
+  }
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  setModalQuickTime(h, m);
+  const secEl = document.getElementById('modalActSecondsInput');
+  if (secEl) secEl.value = s;
+  window.ActModalStopwatchState.elapsedTime = sec * 1000;
+  updateActModalStopwatchDisplay();
+  showToast('زمان از کرنومتر اصلی با موفقیت در فیلدها درج گردید', 'success');
+}
+
+function clearModalActivityTime() {
+  const hrEl = document.getElementById('modalActHoursInput');
+  const minEl = document.getElementById('modalActMinutesInput');
+  const secEl = document.getElementById('modalActSecondsInput');
+  if (hrEl) hrEl.value = '';
+  if (minEl) minEl.value = '';
+  if (secEl) secEl.value = 0;
+  resetActivityModalStopwatch();
+}
+
+function saveActivityTimeFromModal() {
+  const idInput = document.getElementById('modalTargetActivityId');
+  const actId = idInput ? idInput.value : '';
+  const activities = window.AppState.addedActivities || [];
+  const act = activities.find(a => a.id === actId);
+  if (!act) {
+    showToast('فعالیت مورد نظر یافت نشد', 'error');
+    closeActivityTimeModal();
+    return;
+  }
+
+  // اگر کرنومتر در حال کار است، متوقف شود
+  if (window.ActModalStopwatchState.isRunning) {
+    toggleActivityModalStopwatch();
+  }
+
+  let totalSec = 0;
+  let h = 0;
+  let m = 0;
+  let s = 0;
+  let method = 'دستی';
+
+  const isStopwatchTab = window.ActModalStopwatchState.activeTab === 'stopwatch';
+  const swElapsedSec = Math.round((window.ActModalStopwatchState.elapsedTime || 0) / 1000);
+
+  if (isStopwatchTab && swElapsedSec > 0) {
+    totalSec = swElapsedSec;
+    h = Math.floor(totalSec / 3600);
+    m = Math.floor((totalSec % 3600) / 60);
+    s = totalSec % 60;
+    method = 'کرنومتر';
+  } else {
+    h = parseInt(toEnglishDigits(document.getElementById('modalActHoursInput')?.value || ''), 10) || 0;
+    m = parseInt(toEnglishDigits(document.getElementById('modalActMinutesInput')?.value || ''), 10) || 0;
+    s = parseInt(toEnglishDigits(document.getElementById('modalActSecondsInput')?.value || ''), 10) || 0;
+    totalSec = (h * 3600) + (m * 60) + s;
+
+    if (totalSec === 0 && swElapsedSec > 0) {
+      totalSec = swElapsedSec;
+      h = Math.floor(totalSec / 3600);
+      m = Math.floor((totalSec % 3600) / 60);
+      s = totalSec % 60;
+      method = 'کرنومتر';
+    } else {
+      method = (act.durationMethod === 'کرنومتر' && swElapsedSec === totalSec) ? 'کرنومتر' : 'دستی';
+    }
+  }
+
+  let formatted = '';
+  let digital = '';
+  if (totalSec > 0) {
+    const parts = [];
+    if (h > 0) parts.push(`${h} ساعت`);
+    if (m > 0) parts.push(`${m} دقیقه`);
+    if (s > 0) parts.push(`${s} ثانیه`);
+    formatted = parts.join(' و ') || (s > 0 ? `${s} ثانیه` : `${m} دقیقه`);
+    digital = h > 0 
+      ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+      : `00:${String(m).padStart(2, '0')}`;
+  }
+
+  act.durationHours = h;
+  act.durationMinutes = m;
+  act.durationSeconds = s;
+  act.durationTotalSeconds = totalSec;
+  act.durationFormatted = formatted;
+  act.durationDigital = digital;
+  act.durationMethod = totalSec > 0 ? method : '';
+
+  recalculateTotalActivitiesDuration();
+  renderAddedActivitiesList();
+  closeActivityTimeModal();
+
+  showToast(totalSec > 0 
+    ? `زمان «${formatted}» با روش «${method}» برای فعالیت «${act.type}» با موفقیت ذخیره شد.` 
+    : `زمان فعالیت «${act.type}» پاکسازی شد.`, 
+    totalSec > 0 ? 'success' : 'info'
+  );
 }
 
 // انتشار سراسری در آبجکت window جهت اطمینان از دسترس‌پذیری در رویدادهای inline HTML
@@ -862,6 +1893,36 @@ window.handleActivityChange = handleActivityChange;
 window.addSelectedActivity = addSelectedActivity;
 window.removeAddedActivity = removeAddedActivity;
 window.renderAddedActivitiesList = renderAddedActivitiesList;
+window.updateActivityTimeDirect = updateActivityTimeDirect;
+window.setActivityQuickTimeDirect = setActivityQuickTimeDirect;
+window.applyStopwatchToActivity = applyStopwatchToActivity;
+window.startStopwatchForActivity = startStopwatchForActivity;
+window.clearActivityTimeDirect = clearActivityTimeDirect;
+window.setPendingActQuickTime = setPendingActQuickTime;
+window.openActivityTimeModal = openActivityTimeModal;
+window.closeActivityTimeModal = closeActivityTimeModal;
+window.switchModalTimeTab = switchModalTimeTab;
+window.updateActModalStopwatchDisplay = updateActModalStopwatchDisplay;
+window.toggleActivityModalStopwatch = toggleActivityModalStopwatch;
+window.resetActivityModalStopwatch = resetActivityModalStopwatch;
+window.setModalQuickTime = setModalQuickTime;
+window.applyStopwatchTimeToModal = applyStopwatchTimeToModal;
+window.clearModalActivityTime = clearModalActivityTime;
+window.saveActivityTimeFromModal = saveActivityTimeFromModal;
+window.copyStopwatchToPendingActivity = copyStopwatchToPendingActivity;
+window.recalculateTotalActivitiesDuration = recalculateTotalActivitiesDuration;
+window.PendingStopwatchState = PendingStopwatchState;
+window.switchPendingTimeTab = switchPendingTimeTab;
+window.updatePendingStopwatchDisplay = updatePendingStopwatchDisplay;
+window.togglePendingActivityStopwatch = togglePendingActivityStopwatch;
+window.resetPendingActivityStopwatch = resetPendingActivityStopwatch;
+window.saveManualPendingTime = saveManualPendingTime;
+window.saveStopwatchPendingTime = saveStopwatchPendingTime;
+window._realSwitchPendingTimeTab = switchPendingTimeTab;
+window._realTogglePendingActivityStopwatch = togglePendingActivityStopwatch;
+window._realResetPendingActivityStopwatch = resetPendingActivityStopwatch;
+window._realUpdatePendingStopwatchDisplay = updatePendingStopwatchDisplay;
+window._realSetPendingActQuickTime = setPendingActQuickTime;
 
 // ==========================================
 // ۵. مدیریت همکاران همراه (Dynamic Colleagues) با جستجو در بانک پرسنل اکسل
@@ -969,173 +2030,96 @@ function findPersonnelByCode(rawCode) {
   const padded = clean.padStart(7, '0');
   const unpadded = clean.replace(/^0+/, '');
 
-  // ۱. جستجو در مپ جامع حافظه
   if (masterPersonnelMap.has(clean)) return masterPersonnelMap.get(clean);
   if (masterPersonnelMap.has(padded)) return masterPersonnelMap.get(padded);
   if (unpadded && masterPersonnelMap.has(unpadded)) return masterPersonnelMap.get(unpadded);
 
-  if (window.AppState && window.AppState.personnelMap) {
-    if (window.AppState.personnelMap.has(clean)) return window.AppState.personnelMap.get(clean);
-    if (window.AppState.personnelMap.has(padded)) return window.AppState.personnelMap.get(padded);
-    if (unpadded && window.AppState.personnelMap.has(unpadded)) return window.AppState.personnelMap.get(unpadded);
-  }
-
-  // ۲. جستجو در لیست‌های کامل پرسنل
-  const masterList = (typeof window !== 'undefined' && window.INITIAL_PERSONNEL_DATA && Array.isArray(window.INITIAL_PERSONNEL_DATA))
-    ? window.INITIAL_PERSONNEL_DATA
-    : [];
-  const appList = (window.AppState && Array.isArray(window.AppState.personnel)) ? window.AppState.personnel : [];
-  const list = masterList.length >= appList.length ? masterList : appList;
-
-  if (list && list.length > 0) {
-    const match = list.find((p) => {
-      if (!p || !p.code) return false;
-      const c = toEnglishDigits(p.code);
-      const cPadded = c.padStart(7, '0');
-      const cUnpadded = c.replace(/^0+/, '');
-      return c === clean || c === padded || cUnpadded === unpadded || cPadded === padded;
-    });
-    if (match) {
-      masterPersonnelMap.set(clean, match);
-      masterPersonnelMap.set(padded, match);
-      if (unpadded) masterPersonnelMap.set(unpadded, match);
-      return match;
-    }
-  }
-
   return null;
 }
 
+function findPersonnelByCredentials(code, nationalId) {
+  if (!code || !nationalId) return null;
+  const cleanCode = toEnglishDigits(String(code)).replace(/\D/g, '');
+  const cleanNId = toEnglishDigits(String(nationalId)).replace(/\D/g, '');
+  
+  if (!cleanCode || !cleanNId) return null;
+
+  const codePadded = cleanCode.padStart(7, '0');
+  const codeUnpadded = cleanCode.replace(/^0+/, '');
+  const nidPadded = cleanNId.padStart(10, '0');
+  const nidUnpadded = cleanNId.replace(/^0+/, '');
+
+  const list = (window.INITIAL_PERSONNEL_DATA && Array.isArray(window.INITIAL_PERSONNEL_DATA))
+    ? window.INITIAL_PERSONNEL_DATA
+    : (window.AppState && Array.isArray(window.AppState.personnel) ? window.AppState.personnel : []);
+
+  const match = list.find(p => {
+    if (!p) return false;
+    const pCodeRaw = toEnglishDigits(String(p.code || '')).replace(/\D/g, '');
+    const pCodePadded = pCodeRaw.padStart(7, '0');
+    const pCodeUnpadded = pCodeRaw.replace(/^0+/, '');
+
+    const pNIdRaw = toEnglishDigits(String(p.nationalId || '')).replace(/\D/g, '');
+    const pNIdPadded = pNIdRaw.padStart(10, '0');
+    const pNIdUnpadded = pNIdRaw.replace(/^0+/, '');
+
+    const isCodeMatch = (pCodeRaw === cleanCode || pCodePadded === codePadded || pCodeUnpadded === codeUnpadded);
+    const isNIdMatch = (pNIdRaw === cleanNId || pNIdPadded === nidPadded || pNIdUnpadded === nidUnpadded);
+
+    return isCodeMatch && isNIdMatch;
+  });
+
+  return match || null;
+}
+window.findPersonnelByCredentials = findPersonnelByCredentials;
+
 function populatePersonnelDatalist() {
   const datalist = document.getElementById('personnelDatalist');
-  if (!datalist) return;
-  if (datalist.children.length > 0) return;
-
-  const list = (typeof window !== 'undefined' && window.INITIAL_PERSONNEL_DATA && Array.isArray(window.INITIAL_PERSONNEL_DATA) && window.INITIAL_PERSONNEL_DATA.length > 0)
-    ? window.INITIAL_PERSONNEL_DATA
-    : (window.AppState.personnel || []);
-
-  if (!list || list.length === 0) return;
-
-  const seenCodes = new Set();
-  const fragment = document.createDocumentFragment();
-  for (let i = 0; i < list.length; i++) {
-    const p = list[i];
-    if (p && p.code) {
-      const cleanCode = toEnglishDigits(p.code).trim();
-      if (seenCodes.has(cleanCode)) continue;
-      seenCodes.add(cleanCode);
-
-      const opt = document.createElement('option');
-      const parsed = parsePersonnelFullName(p.name);
-      opt.value = `${p.code} - ${parsed.lastName}، ${parsed.firstName}${parsed.fatherName ? ` (${parsed.fatherName})` : ''}`;
-      fragment.appendChild(opt);
-    }
-  }
-  datalist.appendChild(fragment);
+  if (datalist) datalist.innerHTML = '';
 }
 
-function handleModalPersonnelInput(val) {
+function checkPersonnelCredentials() {
+  const pidInput = document.getElementById('modalPersonnelId');
+  const nidInput = document.getElementById('modalNationalId');
   const badge = document.getElementById('modalPersonnelMatchBadge');
-  const fnInput = document.getElementById('modalFirstName');
-  const lnInput = document.getElementById('modalLastName');
-  const fatherInput = document.getElementById('modalFatherName');
-  const badgeFirst = document.getElementById('autoFilledBadgeFirst');
-  const badgeLast = document.getElementById('autoFilledBadgeLast');
-  const badgeFather = document.getElementById('autoFilledBadgeFather');
+  const pid = (pidInput?.value || '').trim();
+  const nid = (nidInput?.value || '').trim();
 
-  const raw = (val || '').trim();
-  if (!raw) {
-    if (badge) badge.innerHTML = '<span class="text-slate-400 text-[11px]">با وارد کردن شماره پرسنلی یا انتخاب از لیست، نام، نام خانوادگی و نام پدر به صورت خودکار تکمیل می‌شود.</span>';
-    if (badgeFirst) badgeFirst.classList.add('hidden');
-    if (badgeLast) badgeLast.classList.add('hidden');
-    if (badgeFather) badgeFather.classList.add('hidden');
+  if (!pid || !nid) {
+    if (badge) {
+      badge.innerHTML = '<div class="p-2 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-bold text-center">لطفاً هر دو فیلد شماره پرسنلی و کد ملی را وارد فرمایید.</div>';
+    }
     return;
   }
 
-  // ۱. اگر کاربر گزینه‌ای از دیتالیست انتخاب کرده باشد (مثلاً "0452891 - ابوالقاسمی، احسان (حسین)")
-  let codeQuery = raw;
-  if (raw.includes(' - ')) {
-    codeQuery = raw.split(' - ')[0].trim();
-    const pidInput = document.getElementById('modalPersonnelId');
-    if (pidInput && pidInput.value !== codeQuery) pidInput.value = codeQuery;
-  }
-
-  // ۲. جستجو در دیتابیس پرسنل بر اساس شماره پرسنلی
-  let match = findPersonnelByCode(codeQuery);
-
-  // ۳. در صورتی که کاربر به صورت متنی نام جستجو کرده باشد (و نه شماره پرسنلی)
+  const match = findPersonnelByCredentials(pid, nid);
   if (!match) {
-    const hasDigits = /[0-9۰-۹٠-٩]/.test(raw);
-    if (!hasDigits) {
-      const list = (typeof window !== 'undefined' && window.INITIAL_PERSONNEL_DATA && Array.isArray(window.INITIAL_PERSONNEL_DATA) && window.INITIAL_PERSONNEL_DATA.length > 0)
-        ? window.INITIAL_PERSONNEL_DATA
-        : (window.AppState.personnel || []);
-      const norm = normalizeSearchText(raw);
-      if (norm.length >= 3 && list.length > 0) {
-        match = list.find(p => p && normalizeSearchText(p.name).includes(norm));
-      }
+    if (badge) {
+      badge.innerHTML = '<div class="p-2.5 rounded-xl bg-rose-500/20 border border-rose-500/40 text-rose-300 text-xs font-bold text-center shadow-md animate-pulse">⚠️ عدم تطبیق مشخصات! شماره پرسنلی یا کد ملی در دیتابیس یافت نشد.</div>';
     }
+    if (pidInput) pidInput.classList.add('border-rose-500');
+    if (nidInput) nidInput.classList.add('border-rose-500');
+    setTimeout(() => {
+      if (pidInput) pidInput.classList.remove('border-rose-500');
+      if (nidInput) nidInput.classList.remove('border-rose-500');
+    }, 2500);
+    return;
   }
 
-  if (match) {
-    const parsed = parsePersonnelFullName(match.name);
-    if (fnInput) {
-      fnInput.value = parsed.firstName;
-      fnInput.dispatchEvent(new Event('input', { bubbles: true }));
-      fnInput.classList.add('border-emerald-500', 'bg-emerald-950/20');
-      setTimeout(() => fnInput.classList.remove('border-emerald-500', 'bg-emerald-950/20'), 1500);
-    }
-    if (lnInput) {
-      lnInput.value = parsed.lastName;
-      lnInput.dispatchEvent(new Event('input', { bubbles: true }));
-      lnInput.classList.add('border-emerald-500', 'bg-emerald-950/20');
-      setTimeout(() => lnInput.classList.remove('border-emerald-500', 'bg-emerald-950/20'), 1500);
-    }
-    if (fatherInput) {
-      fatherInput.value = parsed.fatherName || '';
-      fatherInput.dispatchEvent(new Event('input', { bubbles: true }));
-      fatherInput.classList.add('border-emerald-500', 'bg-emerald-950/20');
-      setTimeout(() => fatherInput.classList.remove('border-emerald-500', 'bg-emerald-950/20'), 1500);
-    }
-    if (badgeFirst) badgeFirst.classList.remove('hidden');
-    if (badgeLast) badgeLast.classList.remove('hidden');
-    if (badgeFather) badgeFather.classList.remove('hidden');
-
-    if (badge) {
-      badge.innerHTML = `
-        <span class="inline-flex items-center gap-1.5 text-emerald-400 font-bold bg-emerald-950/70 border border-emerald-700/60 px-2.5 py-1 rounded-lg text-xs">
-          <svg class="w-4 h-4 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          <span>پرسنل شناسایی شد: <strong>${escapeHtml(parsed.firstName)} ${escapeHtml(parsed.lastName)}</strong> ${parsed.fatherName ? `(نام پدر: <strong>${escapeHtml(parsed.fatherName)}</strong>)` : ''} [کد: ${escapeHtml(match.code)}]</span>
-        </span>
-      `;
-    }
-  } else {
-    if (badgeFirst) badgeFirst.classList.add('hidden');
-    if (badgeLast) badgeLast.classList.add('hidden');
-    if (badgeFather) badgeFather.classList.add('hidden');
-    const isDigits = /[0-9۰-۹٠-٩]/.test(raw);
-    if (badge) {
-      if (isDigits && raw.length >= 4) {
-        badge.innerHTML = `
-          <span class="inline-flex items-center gap-1 text-amber-400 text-[11px] bg-amber-950/40 px-2 py-0.5 rounded border border-amber-800/60">
-            <svg class="w-3.5 h-3.5 text-amber-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-            <span>شماره پرسنلی در بانک اطلاعات یافت نشد (می‌توانید نام، نام خانوادگی و نام پدر را دستی وارد فرمایید).</span>
-          </span>
-        `;
-      } else {
-        badge.innerHTML = '<span class="text-slate-400 text-[11px]">با وارد کردن شماره پرسنلی، نام و نام خانوادگی و نام پدر خودکار تکمیل می‌شود.</span>';
-      }
-    }
+  // در صورت تطبیق: بستن مودال و باز شدن صفحه اصلی با نمایش تمام مشخصات
+  closeModal('personnelModal');
+  if (typeof applyMatchedPersonnelToHome === 'function') {
+    applyMatchedPersonnelToHome(match);
   }
 }
+window.checkPersonnelCredentials = checkPersonnelCredentials;
+
 
 window.masterPersonnelMap = masterPersonnelMap;
 window.indexPersonnelRecords = indexPersonnelRecords;
 window.parsePersonnelFullName = parsePersonnelFullName;
 window.populatePersonnelDatalist = populatePersonnelDatalist;
-window.handleModalPersonnelInput = handleModalPersonnelInput;
-window.executeModalPersonnelInput = handleModalPersonnelInput;
+
 
 function handleColleagueInput(val) {
   const preview = document.getElementById('colleagueMatchPreview');
@@ -2020,7 +3004,7 @@ async function syncRebuildablesForAsett(asettVal) {
 
       const matchedAssetName = matchedRecords[0].asset || asett;
       if (badge) {
-        badge.className = 'text-[10px] text-emerald-300 font-bold bg-emerald-500/15 px-2 py-0.5 rounded border border-emerald-500/30';
+        badge.className = 'text-[10px] text-emerald-300 font-bold bg-emerald-500/15 px-2.5 py-1 rounded-lg border border-emerald-500/30 leading-normal break-words whitespace-normal text-right self-start sm:self-auto max-w-full shadow-sm';
         badge.textContent = `✓ ${uniqueRebuildables.length} قطعه اختصاصی (${matchedAssetName})`;
       }
       if (feedback) {
@@ -2035,7 +3019,7 @@ async function syncRebuildablesForAsett(asettVal) {
       handleRebuildableSelectChange(select);
 
       if (badge) {
-        badge.className = 'text-[10px] text-amber-300 font-bold bg-amber-500/15 px-2 py-0.5 rounded border border-amber-500/30';
+        badge.className = 'text-[10px] text-amber-300 font-bold bg-amber-500/15 px-2.5 py-1 rounded-lg border border-amber-500/30 leading-normal break-words whitespace-normal text-right self-start sm:self-auto max-w-full shadow-sm';
         badge.textContent = 'عدم وجود قطعه برای این ASETT';
       }
       if (feedback) {
@@ -2068,19 +3052,29 @@ function handleRebuildableSelectChange(selectEl) {
   const unit = selectedOpt ? selectedOpt.getAttribute('data-unit') : '';
 
   if (detailBox) {
+    const codeEl = document.getElementById('rebuildableDetailCode');
     const titleEl = document.getElementById('rebuildableDetailTitle');
     const unitEl = document.getElementById('rebuildableDetailUnit');
     const descEl = document.getElementById('rebuildableDetailDesc');
 
+    if (codeEl) codeEl.textContent = val;
     if (titleEl) titleEl.textContent = (desc && desc.trim()) ? `قطعه انتخابی: ${val} (${desc})` : `قطعه انتخابی: ${val}`;
-    if (unitEl) unitEl.textContent = unit ? `سازمان: ${unit}` : '';
+    if (unitEl) {
+      if (unit && unit.trim()) {
+        unitEl.textContent = `سازمان: ${unit}`;
+        unitEl.classList.remove('hidden');
+      } else {
+        unitEl.textContent = '';
+        unitEl.classList.add('hidden');
+      }
+    }
     if (descEl) {
       if (desc && desc.trim()) {
-        descEl.textContent = `توضیحات: ${desc}`;
+        descEl.textContent = desc;
         descEl.classList.remove('hidden');
       } else {
-        descEl.textContent = '';
-        descEl.classList.add('hidden');
+        descEl.textContent = val;
+        descEl.classList.remove('hidden');
       }
     }
     detailBox.classList.remove('hidden');
@@ -2109,8 +3103,8 @@ function resetRebuildableSelect() {
   }
   const badge = document.getElementById('rebuildableStatusBadge');
   if (badge) {
-    badge.className = 'text-[10px] text-slate-400 font-bold bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700';
-    badge.textContent = 'منتظر ورود ASETT ID';
+    badge.className = 'text-[10px] text-slate-400 font-bold bg-slate-800/80 px-2.5 py-1 rounded-lg border border-slate-700 leading-normal break-words whitespace-normal text-right self-start sm:self-auto max-w-full shadow-sm';
+    badge.textContent = 'منتظر ورود ASETT ID  شناسه محل فعالیت';
   }
   const feedback = document.getElementById('asettFeedback');
   if (feedback) {
@@ -2135,9 +3129,11 @@ async function handleGraphFormSubmit(e) {
     return;
   }
 
-  const asett = document.getElementById('asettInput').value.trim();
+  const asettInputEl = document.getElementById('asettInput');
+  const asett = asettInputEl ? asettInputEl.value.trim() : '';
   const rebuildable = getSelectedRebuildableValue();
-  const reportNotes = document.getElementById('reportNotesInput').value.trim();
+  const reportNotesEl = document.getElementById('reportNotesInput');
+  const reportNotes = reportNotesEl ? reportNotesEl.value.trim() : '';
 
   if (!rebuildable) {
     showToast('⚠️ ثبت گزارش بدون قطعه قابل بازسازی (Rebuildable ID) امکان‌پذیر نیست. لطفاً قطعه را از لیست کشویی انتخاب فرمایید.', 'error');
@@ -2206,6 +3202,16 @@ async function handleGraphFormSubmit(e) {
     updateDurationFormattedDisplay();
   }
 
+  // اگر فعالیت‌های مستقل در لیست دارای زمان اختصاصی هستند و فیلدهای کلی خالی است، مجموع زمان‌ها محاسبه شود
+  const actsWithTime = activities.filter(a => (a.durationTotalSeconds || 0) > 0);
+  if (actsWithTime.length > 0 && durationHours === 0 && durationMinutes === 0 && durationSeconds === 0) {
+    let sumSec = 0;
+    actsWithTime.forEach(a => { sumSec += (a.durationTotalSeconds || 0); });
+    durationHours = Math.floor(sumSec / 3600);
+    durationMinutes = Math.floor((sumSec % 3600) / 60);
+    durationSeconds = sumSec % 60;
+  }
+
   // در صورت روشن بودن کرنومتر، متوقف گردد
   if (window.StopwatchState && window.StopwatchState.isRunning) {
     pauseStopwatch();
@@ -2272,8 +3278,12 @@ async function handleGraphFormSubmit(e) {
       isOnline ? 'success' : 'warning'
     );
 
-    resetGraphForm();
-    updatePendingQueueCount();
+    try {
+      resetGraphForm();
+    } catch (resetErr) {
+      console.warn('Error resetting graph form after record save:', resetErr);
+    }
+    if (typeof updatePendingQueueCount === 'function') updatePendingQueueCount();
   } catch (err) {
     console.error('Error saving record', err);
     showToast('خطا در ذخیره‌سازی رکورد در دیتابیس محلی', 'error');
@@ -2281,36 +3291,91 @@ async function handleGraphFormSubmit(e) {
 }
 
 function resetGraphForm() {
-  document.getElementById('asettInput').value = '';
-  const clearAsett = document.getElementById('clearAsettBtn');
-  if (clearAsett) clearAsett.classList.add('hidden');
-  resetRebuildableSelect();
-  document.getElementById('reportNotesInput').value = '';
-  document.getElementById('activityTypeSelect').value = '';
-  const customInput = document.getElementById('customActivityInput');
-  if (customInput) customInput.value = '';
-  document.getElementById('equipmentIdInput').value = '';
-  document.getElementById('deviceTagInput').value = '';
-  document.getElementById('referenceToolInput').value = '';
-  document.getElementById('footageInput').value = '';
-  handleActivityChange();
+  console.log('resetGraphForm v3.1.0 called');
+  
+  const safeSet = (id, val) => {
+    try {
+      const el = document.getElementById(id);
+      if (el) {
+        if (el.tagName === 'SELECT') {
+          el.value = val || '';
+        } else {
+          el.value = val;
+        }
+      }
+    } catch (e) {
+      console.warn(`Error setting value for ${id}:`, e);
+    }
+  };
+  
+  const safeHide = (id) => {
+    try {
+      const el = document.getElementById(id);
+      if (el) el.classList.add('hidden');
+    } catch (e) {
+      console.warn(`Error hiding ${id}:`, e);
+    }
+  };
 
-  window.AppState.addedActivities = [];
-  renderAddedActivitiesList();
+  const safeTry = (fn, name) => {
+    try {
+      if (typeof fn === 'function') fn();
+    } catch (e) {
+      console.warn(`Error in ${name}:`, e);
+    }
+  };
 
-  window.AppState.capturedImages = [];
-  window.AppState.capturedImageBase64 = null;
-  const fileInput = document.getElementById('cameraFileInput');
-  if (fileInput) fileInput.value = '';
-  renderImagePreview();
+  // ۱. پاکسازی ورودی‌های متنی و کشویی
+  safeSet('asettInput', '');
+  safeHide('clearAsettBtn');
+  safeTry(resetRebuildableSelect, 'resetRebuildableSelect');
+  
+  safeSet('reportNotesInput', '');
+  safeSet('activityTypeSelect', '');
+  safeSet('customActivityInput', '');
+  safeSet('equipmentIdInput', '');
+  safeSet('deviceTagInput', '');
+  safeSet('referenceToolInput', '');
+  safeSet('footageInput', '');
+  safeSet('cameraFileInput', '');
 
-  window.AppState.colleagues = [];
-  renderColleaguesList();
+  // ۲. پاکسازی منطق فعالیت‌ها و تصاویر
+  safeTry(handleActivityChange, 'handleActivityChange');
 
-  clearDurationInputs(true);
-  resetStopwatch(true);
+  if (window.AppState) {
+    try {
+      window.AppState.addedActivities = [];
+      window.AppState.capturedImages = [];
+      window.AppState.capturedImageBase64 = null;
+      window.AppState.colleagues = [];
+    } catch (e) { console.warn('Error resetting AppState:', e); }
+  }
+  
+  safeTry(renderAddedActivitiesList, 'renderAddedActivitiesList');
+  safeTry(renderImagePreview, 'renderImagePreview');
+  safeTry(renderColleaguesList, 'renderColleaguesList');
 
-  updateLiveClock();
+  // ۳. پاکسازی تمام ماژول‌های زمان و کرنومتر
+  try {
+    if (typeof clearDurationInputs === 'function') clearDurationInputs(true);
+  } catch (e) { console.warn('Error in clearDurationInputs:', e); }
+  
+  try {
+    if (typeof resetStopwatch === 'function') resetStopwatch(true);
+  } catch (e) { console.warn('Error in resetStopwatch:', e); }
+  
+  try {
+    if (typeof resetPendingActivityStopwatch === 'function') resetPendingActivityStopwatch();
+  } catch (e) { console.warn('Error in resetPendingActivityStopwatch:', e); }
+  
+  try {
+    if (typeof switchPendingTimeTab === 'function') switchPendingTimeTab('manual');
+  } catch (e) { console.warn('Error in switchPendingTimeTab:', e); }
+
+  // ۴. بروزرسانی ساعت و رابط کاربری
+  safeTry(updateLiveClock, 'updateLiveClock');
+  
+  console.log('Form reset completed successfully v3.1.0');
 }
 
 // ==========================================
@@ -2419,7 +3484,8 @@ window.StopwatchState = {
   isRunning: false,
   startTime: 0,
   elapsedTime: 0, // بر حسب میلی‌ثانیه
-  timerInterval: null
+  timerInterval: null,
+  targetActivityId: null
 };
 
 function formatTwoDigits(n) {
@@ -2476,7 +3542,7 @@ function toggleStopwatchStartPause() {
 }
 
 /**
- * همگام‌سازی و ثبت کاملاً خودکار زمان اندازه‌گیری شده کرنومتر در فیلدهای فرم فعالیت
+ * همگام‌سازی و ثبت کاملاً خودکار زمان اندازه‌گیری شده کرنومتر در فیلدهای فرم فعالیت یا فعالیت اختصاصی
  */
 function syncStopwatchTimeToFormInputs(showToastNotification = false) {
   const totalMs = Math.max(0, window.StopwatchState.elapsedTime || 0);
@@ -2484,6 +3550,45 @@ function syncStopwatchTimeToFormInputs(showToastNotification = false) {
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
+
+  // اگر کرنومتر برای یک فعالیت اختصاصی مشخص راه‌اندازی شده باشد
+  if (window.StopwatchState.targetActivityId && window.AppState.addedActivities) {
+    const targetAct = window.AppState.addedActivities.find(a => a.id === window.StopwatchState.targetActivityId);
+    if (targetAct) {
+      targetAct.durationHours = hours;
+      targetAct.durationMinutes = minutes;
+      targetAct.durationSeconds = seconds;
+      targetAct.durationTotalSeconds = totalSeconds;
+
+      const parts = [];
+      if (hours > 0) parts.push(`${hours} ساعت`);
+      if (minutes > 0) parts.push(`${minutes} دقیقه`);
+      if (seconds > 0 && hours === 0) parts.push(`${seconds} ثانیه`);
+      targetAct.durationFormatted = parts.join(' و ') || (seconds > 0 ? `${seconds} ثانیه` : `${minutes} دقیقه`);
+      targetAct.durationDigital = hours > 0
+        ? `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+        : `00:${String(minutes).padStart(2, '0')}`;
+      targetAct.durationMethod = 'کرنومتر';
+
+      // بروزرسانی فیلدهای کارت درون صفحه بدون از بین بردن فوکوس کاربر
+      const cardHr = document.getElementById(`actCardHr_${targetAct.id}`);
+      const cardMin = document.getElementById(`actCardMin_${targetAct.id}`);
+      if (cardHr && document.activeElement !== cardHr) cardHr.value = hours > 0 ? hours : '';
+      if (cardMin && document.activeElement !== cardMin) cardMin.value = minutes;
+
+      const cardBadge = document.getElementById(`actCardBadge_${targetAct.id}`);
+      if (cardBadge) {
+        cardBadge.innerHTML = `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 shadow-sm"><svg class="w-3.5 h-3.5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg><span>${escapeHtml(targetAct.durationFormatted || targetAct.durationDigital)}</span><span class="text-[10px] text-emerald-400/80 font-sans font-normal border-r border-emerald-500/40 pr-1.5 mr-0.5">(${escapeHtml(targetAct.durationMethod)})</span></span>`;
+      }
+
+      recalculateTotalActivitiesDuration();
+
+      if (showToastNotification && totalSeconds > 0) {
+        showToast(`✓ مدت زمان (${targetAct.durationFormatted}) برای فعالیت «${targetAct.type}» ثبت شد.`, 'success');
+      }
+      return;
+    }
+  }
 
   const hrInput = document.getElementById('durationHoursInput');
   const minInput = document.getElementById('durationMinutesInput');
@@ -4239,6 +5344,10 @@ function getReportRowData(r, idx) {
       if (c.equipmentId) parts.push(`شناسه تجهیز: ${c.equipmentId}`);
       if (c.deviceTag) parts.push(`تگ: ${c.deviceTag}`);
       if (c.referenceTool) parts.push(`مرجع: ${c.referenceTool}`);
+      const actDur = act.durationFormatted || act.durationDigital || (act.durationTotalSeconds ? `${Math.floor(act.durationTotalSeconds/3600)}:${String(Math.floor((act.durationTotalSeconds%3600)/60)).padStart(2,'0')}` : '');
+      if (actDur) {
+        parts.push(`زمان: ${actDur} (${act.durationMethod || 'دستی'})`);
+      }
       return (r.activities.length > 1 ? `(${i + 1}) ` : '') + parts.join(' - ');
     }).join(' | ');
   } else {
@@ -4247,6 +5356,10 @@ function getReportRowData(r, idx) {
     if (cond.equipmentId) parts.push(`تجهیز: ${cond.equipmentId}`);
     if (cond.deviceTag) parts.push(`تگ: ${cond.deviceTag}`);
     if (cond.referenceTool) parts.push(`مرجع: ${cond.referenceTool}`);
+    const rDur = r.durationFormatted || r.durationDigital || (r.durationTotalSeconds ? `${Math.floor(r.durationTotalSeconds/3600)}:${String(Math.floor((r.durationTotalSeconds%3600)/60)).padStart(2,'0')}` : '');
+    if (rDur) {
+      parts.push(`زمان: ${rDur} (${r.durationMethod || 'دستی'})`);
+    }
     activityFull = parts.join(' - ');
   }
 
@@ -4516,7 +5629,7 @@ function showDetailModal(id) {
 
   const op = record.operator || {};
 
-  // پردازش و نمایش فعالیت‌های چندگانه
+  // پردازش و نمایش فعالیت‌های چندگانه همراه با زمان اختصاصی هر فعالیت
   let activitiesHtml = '';
   if (Array.isArray(record.activities) && record.activities.length > 0) {
     activitiesHtml = record.activities.map((act, i) => {
@@ -4527,10 +5640,27 @@ function showDetailModal(id) {
         if (act.conditionalFields.deviceTag) conds += ` - شماره تجهیز: ${act.conditionalFields.deviceTag}`;
         if (act.conditionalFields.referenceTool) conds += ` - مرجع: ${act.conditionalFields.referenceTool}`;
       }
+
+      const actTime = (act.durationFormatted || act.durationDigital) 
+        ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-mono font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">⏱️ ${escapeHtml(act.durationFormatted || act.durationDigital)} <span class="text-[10px] text-slate-400 font-sans font-normal">(${escapeHtml(act.durationMethod || 'دستی')})</span></span>`
+        : `<span class="text-slate-500 text-[11px] bg-slate-900 px-2 py-0.5 rounded border border-slate-800">بدون زمان تفکیکی</span>`;
+
+      const rebText = act.rebuildable
+        ? `<span class="text-cyan-300 text-[11px] font-mono font-bold bg-cyan-950/80 px-2 py-0.5 rounded border border-cyan-800/60">Rebuildble ID: ${escapeHtml(act.rebuildable)}</span>`
+        : '';
+
       return `
-        <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950/80 border border-slate-700/60 text-xs">
-          <span class="font-bold text-amber-300">${i + 1}. ${act.type}</span>
-          <span class="text-slate-300 font-mono text-[11px]">${conds || '---'}</span>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950/90 border border-slate-800 text-xs">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="w-5 h-5 rounded-md bg-amber-500/20 text-amber-400 font-mono font-bold flex items-center justify-center text-[11px] border border-amber-500/30 shrink-0">${i + 1}</span>
+            <span class="font-bold text-slate-100">${escapeHtml(act.type)}</span>
+            ${rebText}
+            <span class="text-slate-400 text-[11px]">${escapeHtml(conds)}</span>
+          </div>
+          <div class="shrink-0 flex items-center gap-1.5 mr-auto sm:mr-0 pt-1 sm:pt-0">
+            <span class="text-[11px] text-slate-400">مدت اختصاصی:</span>
+            ${actTime}
+          </div>
         </div>
       `;
     }).join('');
@@ -4972,7 +6102,7 @@ async function loadAdminUsersList() {
         <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">✓ تعریف و سطوح مدیران</span>
         <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">✓ پشتیبان‌گیری و بازنشانی</span>
         <span class="text-[10px] bg-teal-500/10 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded font-bold">✓ ماژول پرسنل (کامل)</span>
-        <span class="text-[10px] bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded font-bold">✓ ماژول asset &Rebuidble (کامل)</span>
+        <span class="text-[10px] bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded font-bold">✓ ماژول asset &Rebuildble (کامل)</span>
       </div>
     `;
     container.appendChild(superRow);
@@ -4999,7 +6129,7 @@ async function loadAdminUsersList() {
         <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">✓ تعریف و سطوح مدیران</span>
         <span class="text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold">✓ پشتیبان‌گیری و بازنشانی</span>
         <span class="text-[10px] bg-teal-500/10 text-teal-300 border border-teal-500/30 px-2 py-0.5 rounded font-bold">✓ ماژول پرسنل (کامل)</span>
-        <span class="text-[10px] bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded font-bold">✓ ماژول asset &Rebuidble (کامل)</span>
+        <span class="text-[10px] bg-cyan-500/10 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 rounded font-bold">✓ ماژول asset &Rebuildble (کامل)</span>
       </div>
     `;
     container.appendChild(managerRow);
@@ -5094,10 +6224,10 @@ async function loadAdminUsersList() {
               <span>پشتیبان‌گیری: <strong class="${hasBackupPerm ? 'text-amber-200 font-bold' : 'text-slate-400'}">${hasBackupPerm ? 'مجاز ✓' : 'مسدود ✕'}</strong></span>
             </button>
 
-            <!-- ۵. دسترسی به ماژول asset &Rebuidble -->
-            <button type="button" onclick="toggleAdminModulePermission('${escapeHtml(admin.username)}', 'assetRebuildable')" class="px-2.5 py-1 text-[11px] rounded-lg border font-medium transition inline-flex items-center gap-1.5 ${hasAssetPerm ? 'bg-cyan-950/80 hover:bg-cyan-900 border-cyan-600/80 text-cyan-300 shadow-sm' : 'bg-slate-950/60 hover:bg-slate-800 border-slate-800 text-slate-500 hover:text-slate-300'}" title="کلیک جهت ${hasAssetPerm ? 'سلب' : 'اعطای'} دسترسی به ماژول asset &Rebuidble">
+            <!-- ۵. دسترسی به ماژول asset &Rebuildble -->
+            <button type="button" onclick="toggleAdminModulePermission('${escapeHtml(admin.username)}', 'assetRebuildable')" class="px-2.5 py-1 text-[11px] rounded-lg border font-medium transition inline-flex items-center gap-1.5 ${hasAssetPerm ? 'bg-cyan-950/80 hover:bg-cyan-900 border-cyan-600/80 text-cyan-300 shadow-sm' : 'bg-slate-950/60 hover:bg-slate-800 border-slate-800 text-slate-500 hover:text-slate-300'}" title="کلیک جهت ${hasAssetPerm ? 'سلب' : 'اعطای'} دسترسی به ماژول asset &Rebuildble">
               <span class="w-2 h-2 rounded-full ${hasAssetPerm ? 'bg-cyan-400 shadow-[0_0_6px_#22d3ee]' : 'bg-slate-600'}"></span>
-              <span>asset &Rebuidble: <strong class="${hasAssetPerm ? 'text-cyan-200 font-bold' : 'text-slate-400'}">${hasAssetPerm ? 'مجاز ✓' : 'مسدود ✕'}</strong></span>
+              <span>asset &Rebuildble: <strong class="${hasAssetPerm ? 'text-cyan-200 font-bold' : 'text-slate-400'}">${hasAssetPerm ? 'مجاز ✓' : 'مسدود ✕'}</strong></span>
             </button>
           </div>
         </div>
@@ -5187,7 +6317,7 @@ function updateNewAdminScopeHint() {
   if (permOrg) selectedModules.push('تعریف سرپرستی‌ها و واحدها');
   if (permAdmin) selectedModules.push('تعریف و سطوح مدیران');
   if (permBackup) selectedModules.push('پشتیبان‌گیری و بازنشانی');
-  if (permAsset) selectedModules.push('ماژول asset &Rebuidble');
+  if (permAsset) selectedModules.push('ماژول asset &Rebuildble');
 
   let modulesPart = '';
   if (selectedModules.length > 0) {
@@ -5295,7 +6425,7 @@ async function toggleAdminModulePermission(username, moduleKey) {
       orgManage: 'ماژول سرپرستی و واحدها',
       adminManage: 'ماژول تعریف مدیران',
       backup: 'ماژول پشتیبان‌گیری',
-      assetRebuildable: 'ماژول asset &Rebuidble'
+      assetRebuildable: 'ماژول asset &Rebuildble'
     };
     const modLabel = labels[moduleKey] || moduleKey;
     showToast(`دسترسی به «${modLabel}» برای مدیر «${admin.fullName || username}» ${newStatus ? 'اعطا شد (فعال)' : 'سلب گردید (مسدود)'}`, 'success');
@@ -5477,7 +6607,7 @@ function updateEditAdminScopeHint() {
   if (permOrg) selectedModules.push('تعریف سرپرستی‌ها و واحدها');
   if (permAdmin) selectedModules.push('تعریف و سطوح مدیران');
   if (permBackup) selectedModules.push('پشتیبان‌گیری و بازنشانی');
-  if (permAsset) selectedModules.push('ماژول asset &Rebuidble');
+  if (permAsset) selectedModules.push('ماژول asset &Rebuildble');
 
   let modulesPart = '';
   if (selectedModules.length > 0) {
@@ -5970,35 +7100,25 @@ function populateOrgDropdowns() {
 }
 
 function preparePersonnelModal() {
-  populateOrgDropdowns();
-  populatePersonnelDatalist();
-  const op = window.AppState.operator;
-  if (op) {
-    const fn = document.getElementById('modalFirstName');
-    const ln = document.getElementById('modalLastName');
-    const fath = document.getElementById('modalFatherName');
-    const pid = document.getElementById('modalPersonnelId');
-    const sup = document.getElementById('modalSupervision');
-    const role = document.getElementById('modalRole');
+  const pidInput = document.getElementById('modalPersonnelId');
+  const nidInput = document.getElementById('modalNationalId');
+  const badge = document.getElementById('modalPersonnelMatchBadge');
 
-    if (pid) pid.value = op.personnelId || '';
-    if (fn) fn.value = op.firstName || '';
-    if (ln) ln.value = op.lastName || '';
-    if (fath) fath.value = op.fatherName || '';
-    if (sup && op.supervision) sup.value = op.supervision;
-    updateModalUnitsDropdown(op.unit || '');
-    if (role) role.value = op.role || '';
-
-    if (op.personnelId) {
-      handleModalPersonnelInput(op.personnelId);
-    }
-  } else {
-    updateModalUnitsDropdown('');
-    const badge = document.getElementById('modalPersonnelMatchBadge');
-    if (badge) {
-      badge.innerHTML = '<span class="text-slate-400 text-[11px]">با وارد کردن شماره پرسنلی یا انتخاب از لیست، نام، نام خانوادگی و نام پدر به صورت خودکار تکمیل می‌شود.</span>';
-    }
+  if (pidInput) {
+    pidInput.value = '';
+    pidInput.classList.remove('border-rose-500');
   }
+  if (nidInput) {
+    nidInput.value = '';
+    nidInput.classList.remove('border-rose-500');
+  }
+  if (badge) {
+    badge.innerHTML = '';
+  }
+
+  setTimeout(() => {
+    if (pidInput) pidInput.focus();
+  }, 100);
 }
 
 // ==========================================
@@ -6391,17 +7511,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const graphForm = document.getElementById('graphRegistrationForm');
   if (graphForm) graphForm.addEventListener('submit', handleGraphFormSubmit);
 
-  const personnelForm = document.getElementById('personnelProfileForm');
-  if (personnelForm) personnelForm.addEventListener('submit', saveOperatorProfile);
-
-  const modalPidInput = document.getElementById('modalPersonnelId');
-  if (modalPidInput) {
-    ['input', 'change', 'blur', 'paste'].forEach(evt => {
-      modalPidInput.addEventListener(evt, () => {
-        handleModalPersonnelInput(modalPidInput.value);
-      });
+  const authForm = document.getElementById('personnelAuthForm');
+  if (authForm) {
+    authForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      checkPersonnelCredentials();
     });
   }
+
+  const modalPidInput = document.getElementById('modalPersonnelId');
+  const modalNidInput = document.getElementById('modalNationalId');
+
 
   const modalSupSelect = document.getElementById('modalSupervision');
   if (modalSupSelect) {
@@ -6874,7 +7994,7 @@ function showAdminTab(tabName) {
 }
 
 // ==========================================
-// ۲۲. ماژول بانک اطلاعات تجهیزات و قطعات بازسازی (asset &Rebuidble)
+// ۲۲. ماژول بانک اطلاعات تجهیزات و قطعات بازسازی (asset &Rebuildble)
 // ==========================================
 var DEFAULT_INITIAL_ASSETS = [];
 
@@ -7146,7 +8266,7 @@ function renderAssetRebuildableTable(list, scope) {
           </div>
         </td>
 
-        <!-- ۳. Rebuidble -->
+        <!-- ۳. Rebuildble -->
         <td class="py-3 px-4">
           <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-semibold text-xs">
             <svg class="w-3 h-3 shrink-0 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/></svg>
@@ -7199,7 +8319,7 @@ function renderAssetRebuildableTable(list, scope) {
 }
 
 // ==========================================
-// عملیات افزودن و ویرایش رکورد با پشتیبانی از چند Rebuidble برای هر ASETT
+// عملیات افزودن و ویرایش رکورد با پشتیبانی از چند Rebuildble برای هر ASETT
 // ==========================================
 function openAddAssetModal() {
   const form = document.getElementById('newAssetRebuildableForm');
@@ -7302,7 +8422,7 @@ function addNewRebuildableItemRow(initialName = '', initialDesc = '') {
     <div class="flex items-center justify-between">
       <span class="text-[11px] font-bold text-cyan-400 flex items-center gap-1.5">
         <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
-        <span>Rebuidble شماره <strong class="row-num font-mono">${rowCount}</strong></span>
+        <span>Rebuildble شماره <strong class="row-num font-mono">${rowCount}</strong></span>
       </span>
       <button type="button" onclick="removeRebuildableItemRow(this)" class="text-rose-400 hover:text-rose-300 text-xs px-2 py-0.5 rounded hover:bg-rose-950/40 transition">
         حذف سطر ✕
@@ -7310,7 +8430,7 @@ function addNewRebuildableItemRow(initialName = '', initialDesc = '') {
     </div>
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
       <div>
-        <label class="block text-[11px] text-slate-300 mb-1 font-semibold">عنوان یا کد Rebuidble: <span class="text-red-400">*</span></label>
+        <label class="block text-[11px] text-slate-300 mb-1 font-semibold">عنوان یا کد Rebuildble: <span class="text-red-400">*</span></label>
         <input type="text" required value="${escapeHtml(initialName)}" placeholder="عنوان یا کد قطعه بازسازی..." class="rebuildable-name-input w-full bg-slate-900 border border-slate-700 focus:border-cyan-500 rounded-lg px-3 py-1.5 text-xs text-slate-100 outline-none">
       </div>
       <div>
@@ -7330,7 +8450,7 @@ function removeRebuildableItemRow(btn) {
   const row = btn.closest('.rebuildable-row');
   if (row) {
     if (container.children.length <= 1) {
-      showToast('حداقل یک قطعه Rebuidble باید تعریف گردد', 'warning');
+      showToast('حداقل یک قطعه Rebuildble باید تعریف گردد', 'warning');
       return;
     }
     row.remove();
@@ -7385,7 +8505,7 @@ async function handleNewAssetRebuildableSubmit(e) {
     const rDesc = descInput ? descInput.value.trim() : '';
 
     if (!rName) {
-      showToast(`عنوان Rebuidble در سطر ${i + 1} الزامی است`, 'warning');
+      showToast(`عنوان Rebuildble در سطر ${i + 1} الزامی است`, 'warning');
       if (nameInput) nameInput.focus();
       return;
     }
@@ -7401,7 +8521,7 @@ async function handleNewAssetRebuildableSubmit(e) {
   }
 
   if (recordsToSave.length === 0) {
-    showToast('حداقل یک قطعه Rebuidble باید مشخص شود', 'warning');
+    showToast('حداقل یک قطعه Rebuildble باید مشخص شود', 'warning');
     return;
   }
 
@@ -7548,7 +8668,7 @@ function exportAssetRebuildablesToExcel() {
   }
 
   const aoa = [
-    ['شماره ردیف', 'ASETT', 'Rebuidble', 'توضیحات', 'سرپرستی', 'واحد']
+    ['شماره ردیف', 'ASETT', 'Rebuildble', 'توضیحات', 'سرپرستی', 'واحد']
   ];
 
   list.forEach((r, idx) => {
@@ -7569,7 +8689,7 @@ function exportAssetRebuildablesToExcel() {
     ws['!cols'] = [
       { wch: 12 }, // شماره ردیف
       { wch: 32 }, // ASETT
-      { wch: 32 }, // Rebuidble
+      { wch: 32 }, // Rebuildble
       { wch: 50 }, // توضیحات
       { wch: 28 }, // سرپرستی
       { wch: 28 }  // واحد
@@ -7599,7 +8719,7 @@ function downloadAssetExcelTemplate() {
   const sampleUnit = (!scope.isGlobalUnit && scope.unit) ? scope.unit : 'واحد نگهداری و تعمیرات';
 
   const aoa = [
-    ['شماره ردیف', 'ASETT', 'Rebuidble', 'توضیحات', 'سرپرستی', 'واحد'],
+    ['شماره ردیف', 'ASETT', 'Rebuildble', 'توضیحات', 'سرپرستی', 'واحد'],
     [1, 'کمپرسور اطلس کوپکو GA-75', 'المنت فیلتر هوا', 'سرویس هر ۵۰۰۰ ساعت و تعویض با کیت اورجینال', sampleSup, sampleUnit],
     [2, 'کمپرسور اطلس کوپکو GA-75', 'شیر آنلودر', 'بررسی اورینگ‌ها و فنر داخلی', sampleSup, sampleUnit],
     [3, 'ترانسمیتر فشار Rosemount 3051', 'کپسول دیافراگمی هسلوی', 'کالیبراسیون ۵ نقطه‌ای و تست نشتی', sampleSup, sampleUnit]
@@ -7822,7 +8942,7 @@ window.saveDurationTime = saveDurationTime;
 window.updateDurationFormattedDisplay = updateDurationFormattedDisplay;
 window.clearDurationInputs = clearDurationInputs;
 
-// توابع ماژول asset &Rebuidble
+// توابع ماژول asset &Rebuildble
 window.renderAssetRebuildableUI = renderAssetRebuildableUI;
 window.openAddAssetModal = openAddAssetModal;
 window.onNewAssetSupervisionChange = onNewAssetSupervisionChange;

@@ -4,7 +4,7 @@
  */
 
 // نسخه سراسری پروژه - با تغییر این متغیر، اپلیکیشن‌های نصب‌شده قدیمی نسخه جدید را شناسایی و ارتقا می‌دهند
-var APP_VERSION = '2.5.7';
+var APP_VERSION = '3.1.0';
 var CACHE_NAME = `automation-graph-pwa-v${APP_VERSION}`;
 var CORE_ASSETS = [
   '/',
